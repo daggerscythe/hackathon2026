@@ -1,18 +1,18 @@
-Win/lose condition
+## Win/lose condition
 
-Game genre:
+## Game genre:
 
-Gameplay loop
+## Gameplay loop
 
-CSV integration:
+## CSV integration:
     - Players
     - NPCs
     - hero/Villain stats
 
-Inutitive user UI & mechanisms:
+## Inutitive user UI & mechanisms:
 
 
-MVP+:
+## MVP+:
     - additional levels
     - randomness for replayability
     - tutorial or help system
