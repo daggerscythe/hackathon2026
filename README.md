@@ -9,6 +9,16 @@
 
 ## CSV integration:
     - Playable characters
+# Asset Acquisition
+    - Map or Stage to be used
+    - Character 1 Acquisition (TBD)
+    - Character 2 Acquisition (TBD)
+    - Character 3 Acquisition (TBD)
+    - Character 4 Acquisition (TBD)
+    - Character 5 Acquisition (TBD)
+    - Character 6 Acquisition (TBD)
+    - Character 7 Acquisition (TBD)
+
 
 # OPTIONAL
 ## Game genre:
