@@ -17,18 +17,21 @@ pnpm dev
 
 ## Switch models
 
-Open the dev URL with a query param:
+Edit the single import line in `src/main.js`:
 
-- `/?model=cube`
+```js
+import { createModel } from './models/cube.js';
+```
 
-Model names come from filenames in `src/models/` (without `.js`).
+Point it at whichever model file you want to show.
+
+If you use `scene.gltf`, make sure its referenced `scene.bin` file is also present in `public/blends/`.
 
 ## Add a new model file
 
-1. Create a new file in `src/models/` (example: `src/models/cube.js`).
+1. Create a new file in `src/models/` (example: `src/models/myModel.js`).
 2. Export `createModel()` and return a `THREE.Object3D`.
-
-No registry file is needed — `src/main.js` auto-discovers `src/models/*.js` via Vite.
+3. Update the import in `src/main.js` to point to your new file.
 
 Optional animation: attach a tick function:
 
