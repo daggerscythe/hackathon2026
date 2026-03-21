@@ -3,7 +3,7 @@ import './style.css';
 import { createViewer } from './core/viewer.js';
 
 // Change this import path to switch which model file is shown.
-import { createModel } from './models/scene.js';
+import { createModel } from './models/egg3.js';
 
 function getContainer() {
   const el = document.querySelector('[data-viewer]');
@@ -13,6 +13,11 @@ function getContainer() {
   return el;
 }
 
+function getPlayButton() {
+  const el = document.querySelector('[data-play]');
+  return el instanceof HTMLButtonElement ? el : null;
+}
+
 async function run() {
   const container = getContainer();
   const viewer = createViewer({ container });
@@ -20,6 +25,17 @@ async function run() {
   const model = await createModel();
   viewer.setModel(model, { autoFrame: true });
   viewer.start();
+
+  const playBtn = getPlayButton();
+  if (playBtn) {
+    const animations = viewer.listAnimations();
+    playBtn.disabled = animations.length === 0;
+
+    playBtn.addEventListener('click', () => {
+      // Plays the first clip by default.
+      viewer.playAnimation(0);
+    });
+  }
 
   // Helpful for debugging in DevTools without adding UI.
   window.__viewer = viewer;

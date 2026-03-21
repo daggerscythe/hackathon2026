@@ -26,5 +26,6 @@ export async function createModel() {
 
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync('/blends/scene.gltf');
+  gltf.scene.userData.gltfAnimations = gltf.animations;
   return gltf.scene;
 }

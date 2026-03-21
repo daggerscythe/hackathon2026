@@ -6,5 +6,6 @@ export async function createModel() {
   const gltf = await loader.loadAsync('/blends/Egg2.glb');
 
   // Most GLBs put their content under gltf.scene
+  gltf.scene.userData.gltfAnimations = gltf.animations;
   return gltf.scene;
 }
