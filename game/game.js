@@ -120,7 +120,7 @@ function createCharacter(id, role, chosenClass, csvRow, entityId) {
 function addCharacter(id, role, chosenClass, csvRow, entityId) {
     const character = createCharacter(id, role, chosenClass, csvRow, entityId);
     characters.set(id, character);
-
+    initCooldowns(id);
     console.log(`Registered: ${character.name} [${role} / ${chosenClass}]`);
     return character;
 }
@@ -362,7 +362,155 @@ function resetMatch() {
 // =====================================
 // Combat System
 // =====================================
+const COOLDOWNS = {
+    magic: 3000, // in ms
+    heal: 5000,
+};
 
+const CLASS_ATTACK_TYPE = {
+    // hero classes
+    tank: 'strength',
+    dps: 'strength',
+    support: 'strength',
+    mage: 'magic',
+    // villain classes
+    brute: 'strength',
+    agile: 'strength',
+    villain_mage: 'magic',
+};
+
+// key: characterId, value: { magic: timestamp, heal: timestamp }
+const cooldownTracker = new Map();
+
+/**
+ * initialize cooldown tracking upon initial join
+ * called inside addCharacter
+ */
+function initCooldowns(id) {
+    cooldownTracker.set(id, {
+        magic: 0,
+        heal: 0,
+    });
+}
+
+/**
+ * returns true if ability still on cooldown
+ * @param {string} id
+ * @param {string} ability - 'magic' | 'heal'
+ */
+function isOnCooldown(id, ability) {
+    const tracker = cooldownTracker.get(id);
+    if (!tracker) return false;
+
+    const elapsed = Date.now() - tracker[ability];
+    return elapsed < COOLDOWNS[ability];
+}
+
+/**
+ * returns how many ms remain for UI
+ * @param {string} id 
+ * @param {string} ability 
+ */
+function getCooldownRemaining(id, ability) {
+    const tracker = cooldownTracker.get(id);
+    if (!tracker) return 0;
+
+    const elapsed = Date.now() - tracker[ability];
+    return Math.max(0, COOLDOWNS[ability] - elapsed);
+}
+
+// Attack Methods
+/**
+ * melee has no cooldown
+ * @param {string} attackerId 
+ * @param {string} defenderId 
+ */
+function performMelee(attackerId, defenderId) {
+    const attacker = characters.get(attackerId);
+    const defender = characters.get(defenderId);
+
+    if (!attacker || !defender || !attacker.isAlive || !defender.isAlive || getState() !== STATES.BATTLE) return;
+
+    applyHit(attackerId, defenderId, 'strength');
+
+    document.dispatchEvent(new CustomEvent('game:meleeFired', {
+        detail: {
+            attackerId,
+            defenderId,
+        }
+    }));
+}
+
+/**
+ * magic attack has cooldown
+ * @param {string} attackerId 
+ * @param {object} direction - {x,y,z} unit vector of aim directin
+ */
+function performMagic(attackerId, direction) {
+    const attacker = characters.get(attackerId);
+
+    if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return;
+    if (isOnCooldown(attackerId, 'magic')) {
+        const remaining = (getCooldownRemaining(attackerId, 'magic') / 1000).toFixed(1);
+        console.log(`${attacker.name} magic on cooldown - ${remaining}s remaining`);
+        return;
+    }
+
+    cooldownTracker.get(attackerId).magic = Date.now();
+    console.log(`${attacker.name} fired magic towards ${JSON.stringify(direction)}`);
+
+    document.dispatchEvent(new CustomEvent('game:magicFired', {
+        detail: {
+            attackerId,
+            direction,
+        }
+    }));
+}
+
+/**
+ * heal has cooldown
+ * @param {string} healerId 
+ * @param {string} healeeId 
+ */
+function performHeal(healerId, healeeId) {
+    const healer = characters.get(healerId);
+    const healee = characters.get(healeeId);
+
+    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
+    if (isOnCooldown(healerId, 'heal')) {
+        const remaining = (getCooldownRemaining(healerId, 'heal') / 1000).toFixed(1);
+        console.log(`${healer.name} heal on cooldown - ${remaining}s remaining`);
+        return;
+    }
+
+    cooldownTracker.get(healerId).heal = Date.now();
+    applyHeal(healerId, healeeId);
+
+    document.dispatchEvent(new CustomEvent('game:healPerformed', {
+        detail: {
+            healerId,
+            healeeId,
+        }
+    }));
+}
+
+/**
+ * wrapper function to determine what attack type to call
+ * @param {string} attackerId 
+ * @param {string} defenderId - required for melee, ignored for magic
+ * @param {object} direction  - required for magic, ignored for melee
+ */
+function performAttack(attackerId, defenderId, direction) {
+    const attacker = characters.get(attackerId);
+    if (!attacker || !attacker.isAlive) return; 
+    const attackType = CLASS_ATTACK_TYPE[attacker.chosenClass];
+
+    if (attackType === 'magic') {
+        performMagic(attackerId, direction);
+    } else {
+        performMelee(attackerId, defenderId);
+    }
+}
 
 // =====================================
 // EXP & Progression 
