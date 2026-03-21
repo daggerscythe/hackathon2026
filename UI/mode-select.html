@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mode Selection</title>
+  <link rel="stylesheet" href="menu.css" />
+  <link rel="stylesheet" href="mode-select.css" />
+  <style>
+    #bg-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="bg-canvas"></canvas>
+
+  <div class="mode-container">
+
+    <h1 class="game-title">Select Mode</h1>
+    <p class="subtitle">Choose your path</p>
+
+    <p class="mode-eyebrow">— Available Modes</p>
+
+    <div class="mode-grid">
+
+      <div class="mode-card" data-mode="story" data-glyph="I"
+           onclick="selectMode(this, 'Fate of Goliath')">
+        <div class="mode-card-icon">⚔</div>
+        <div class="mode-title">Fate of Goliath</div>
+        <div class="mode-title-rule"></div>
+        <div class="mode-description">Destroy the cursed monster or become the evil you once sought to eliminate.</div>
+      </div>
+
+      <div class="mode-card" data-mode="arcade" data-glyph="II"
+           onclick="selectMode(this, 'Hone Your Skills')">
+        <div class="mode-card-icon">◈</div>
+        <div class="mode-title">Hone Your Skills</div>
+        <div class="mode-title-rule"></div>
+        <div class="mode-description">Develop your abilities so you'll be strong enough for the fated battle.</div>
+      </div>
+
+      <div class="mode-card" data-mode="multiplayer" data-glyph="III"
+           onclick="selectMode(this, 'Multiplayer')">
+        <div class="mode-card-icon">✦</div>
+        <div class="mode-title">Skirmish</div>
+        <div class="mode-title-rule"></div>
+        <div class="mode-description">Face your allies in friendly competition.</div>
+      </div>
+
+    </div>
+
+    <div class="mode-actions">
+      <p class="mode-status" id="status-text">Awaiting selection</p>
+      <button class="menu-btn secondary" onclick="goBack()">← Back</button>
+      <button class="menu-btn" id="confirm-btn" onclick="confirmSelection()">Confirm →</button>
+    </div>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // ── Three.js — same wireframe style as menu.html ──────────────────────
+    const canvas = document.getElementById('bg-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 0, 14);
+
+    const wireBright = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.20 });
+    const wireMid    = new THREE.MeshBasicMaterial({ color: 0xd4b86a, wireframe: true, transparent: true, opacity: 0.11 });
+    const wireFaint  = new THREE.MeshBasicMaterial({ color: 0xe8d090, wireframe: true, transparent: true, opacity: 0.06 });
+
+    // ── Helmet (mode-select centrepiece — fits the "choose your fate" theme)
+    const helmetGroup = new THREE.Group();
+
+    // Dome
+    const domeGeo = new THREE.SphereGeometry(2.2, 12, 9, 0, Math.PI * 2, 0, Math.PI * 0.58);
+    helmetGroup.add(new THREE.Mesh(domeGeo, wireMid));
+
+    // Brim
+    const brimGeo = new THREE.TorusGeometry(2.2, 0.09, 5, 36, Math.PI * 2);
+    const brim = new THREE.Mesh(brimGeo, wireBright);
+    brim.rotation.x = Math.PI * 0.5;
+    brim.position.y = -0.85;
+    helmetGroup.add(brim);
+
+    // Visor slit (flat box)
+    const visorGeo = new THREE.BoxGeometry(2.4, 0.28, 0.1, 8, 2, 2);
+    const visor = new THREE.Mesh(visorGeo, wireBright);
+    visor.position.set(0, 0.18, 2.0);
+    helmetGroup.add(visor);
+
+    // Cheek guards
+    for (const side of [-1, 1]) {
+      const cheekGeo = new THREE.BoxGeometry(0.7, 1.1, 0.12, 3, 4, 2);
+      const cheek = new THREE.Mesh(cheekGeo, wireMid);
+      cheek.position.set(side * 1.9, -0.5, 1.1);
+      cheek.rotation.y = side * 0.35;
+      helmetGroup.add(cheek);
+    }
+
+    // Crest ridge down the top
+    const crestGeo = new THREE.CylinderGeometry(0.06, 0.12, 4.0, 4, 6);
+    const crest = new THREE.Mesh(crestGeo, wireBright);
+    crest.rotation.z = Math.PI * 0.5;
+    crest.position.set(0, 1.8, 0.3);
+    helmetGroup.add(crest);
+
+    helmetGroup.position.set(5.0, 0.4, -2.5);
+    scene.add(helmetGroup);
+
+    // ── Sword (carried over from menu feel) ──────────────────────────────
+    const swordGroup = new THREE.Group();
+    const bladeGeo = new THREE.CylinderGeometry(0.03, 0.15, 5.4, 4, 10);
+    const blade = new THREE.Mesh(bladeGeo, wireBright);
+    blade.rotation.y = Math.PI / 4;
+    swordGroup.add(blade);
+    const guardGeo = new THREE.BoxGeometry(2.5, 0.12, 0.20, 5, 2, 2);
+    const guard = new THREE.Mesh(guardGeo, wireBright);
+    guard.position.y = -2.7;
+    swordGroup.add(guard);
+    const gripGeo = new THREE.CylinderGeometry(0.09, 0.11, 1.1, 6, 4);
+    const grip = new THREE.Mesh(gripGeo, wireMid);
+    grip.position.y = -3.5;
+    swordGroup.add(grip);
+    const pommelGeo = new THREE.SphereGeometry(0.25, 6, 5);
+    const pommel = new THREE.Mesh(pommelGeo, wireBright);
+    pommel.position.y = -4.15;
+    swordGroup.add(pommel);
+
+    swordGroup.position.set(-4.5, 1.0, -3.5);
+    swordGroup.rotation.z = -0.2;
+    scene.add(swordGroup);
+
+    // ── Drifting background planes ────────────────────────────────────────
+    const floaters = [];
+    for (let i = 0; i < 7; i++) {
+      const geo = new THREE.PlaneGeometry(
+        3 + Math.random() * 6, 2 + Math.random() * 5,
+        Math.floor(3 + Math.random() * 5), Math.floor(3 + Math.random() * 5)
+      );
+      const mesh = new THREE.Mesh(geo, wireFaint);
+      mesh.position.set(
+        (Math.random() - 0.5) * 26,
+        (Math.random() - 0.5) * 16,
+        -10 - Math.random() * 12
+      );
+      mesh.rotation.set(
+        (Math.random() - 0.5) * 1.5,
+        (Math.random() - 0.5) * 1.5,
+        Math.random() * Math.PI
+      );
+      mesh.userData.axis = new THREE.Vector3(
+        Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5
+      ).normalize();
+      mesh.userData.speed = 0.0005 + Math.random() * 0.001;
+      scene.add(mesh);
+      floaters.push(mesh);
+    }
+
+    // ── Animate ───────────────────────────────────────────────────────────
+    let t = 0;
+    function animate() {
+      requestAnimationFrame(animate);
+      t += 0.007;
+
+      helmetGroup.rotation.y = t * 0.2;
+      helmetGroup.position.y = 0.4 + Math.sin(t * 0.5) * 0.28;
+
+      swordGroup.rotation.y = -t * 0.15;
+      swordGroup.position.y = 1.0 + Math.cos(t * 0.5) * 0.22;
+
+      for (const f of floaters) f.rotateOnAxis(f.userData.axis, f.userData.speed);
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── UI logic ──────────────────────────────────────────────────────────
+    let selectedMode = null;
+
+    function selectMode(card, name) {
+      document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedMode = name;
+      const el = document.getElementById('status-text');
+      el.innerHTML = `Selected: <span>${name}</span>`;
+    }
+
+    function confirmSelection() {
+      if (!selectedMode) {
+        alert('Please select a mode first.');
+        return;
+      }
+      alert('Starting ' + selectedMode + '…');
+    }
+
+    function goBack() {
+      window.location.href = 'menu.html';
+    }
+  </script>
+
+</body>
+</html>

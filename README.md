@@ -34,6 +34,8 @@
     - WebSockets
     
 ## Inutitive user UI & mechanisms:
+
+
 ### Color Scheme
     - Primary (TBD)
     - Secondary (TBD)
@@ -44,3 +46,5 @@
     - tutorial or help system
     - multiplayer (3v1 or 2v2)
     - ranks
+
+## Modeling Params
