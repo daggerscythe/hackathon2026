@@ -249,10 +249,120 @@ function applyHeal(healerId, healeeId) {
 // =====================================
 // Match Manager
 // =====================================
+const EXP_REWARD = {
+    win: 100,
+    loss: 25,
+};
+
+let matchState = null; // current match's metadata
+
+/**
+ * all players selected characters, time to start the battle
+ * @param {string} villainId
+ * @param {string[]} heroIds
+ */
+function initMatch(villainId, heroIds) {
+    if (getState() !== STATES.CHARACTER_SELECT) {
+        console.warn('initMatch called outside of CHARACTER_SELECT state');
+        return;
+    }
+}
+
+matchState = {
+    villainId,
+    heroIds,
+    winner: null, // 'hero' | 'villain'
+    startTime: Date.now(),
+    endTime: null,
+};
+
+// start listening for deaths
+document.addEventListener('game:characterDefeated', onCharacterDefeated);
+
+transitionTo(STATES.BATTLE);
+console.log(`Match started. Villain: ${villainId} vs Heroes: ${heroIds.join(', ')}`);
+
+document.dispatchEvent(new CustomEvent('game:matchStarted', {
+    detail: { villainId, heroIds }
+}));
+
+function onCharacterDefeated(event) {
+    checkWin();
+}
+
+function checkWin() {
+    if (!matchState || getState() !== STATES.BATTLE) return;
+
+    const villainDead = !isAlive(matchState.villainId);
+    const HeroesDead = matchState.heroIds.every(id => !isAlive(id));
+
+    if (villainDead) {
+        endMatch('hero');
+    } else if (HeroesDead) {
+        endMatch('villain');
+    }
+}
+
+/**
+ * end match, award exp, fire game over event
+ * @param {string} winnerRole - 'hero' | 'villain'
+ */
+function endMatch(winnerRole) {
+    if (!matchState) return;
+
+    matchState.winner = winnerRole;
+    matchState.endTime = Date.now();
+
+    // stop death listener
+    document.removeEventListener('game:characterDefeated', onCharacterDefeated);
+
+    awardExp(winnerRole);
+    transitionTo(STATES.GAME_OVER);
+
+    console.log(`Match over. ${winnerRole} wins.`);
+
+    document.dispatchEvent(new CustomEvent('game:matchOver', {
+        detail: {
+            winner: winnerRole,
+            villainId: matchState.villainId,
+            heroIds: matchState.heroIds,
+            duration: matchState.endTime - matchState.startTime,
+        }
+    }));
+
+    matchState = null;
+}
+
+function awardExp(winnerRole) {
+    characters.forEach(char => {
+        const won = char.role === winnerRole;
+        char.exp += won ? EXP_REWARD.win : EXP_REWARD.loss;
+
+        console.log(
+            `${char.name} earned ${won ? EXP_REWARD.win : EXP_REWARD.loss} EXP` + 
+            ` (total: ${char.exp})`
+        );
+
+        document.dispatchEvent(new CustomEvent('game:expAwarded', {
+            detail: {
+                characterId: char.id,
+                amount:      won ? EXP_REWARD.win : EXP_REWARD.loss,
+                total:       char.exp,
+            }
+        }));
+    });
+}
+
+function resetMatch() {
+    matchState = null;
+    clearCharacters();
+    transitionTo(STATES.CHARACTER_SELECT);
+}
 
 // =====================================
 // Combat System
 // =====================================
+
 
 // =====================================
 // EXP & Progression 
