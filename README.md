@@ -1,13 +1,19 @@
+# REQUIRED
 ## Win/lose condition
-
-## Game genre:
+    - defeat opposing side
 
 ## Gameplay loop
+    - character select
+    - 1 villain fights 3 heroes
+    - winner  gains exp
 
 ## CSV integration:
-    - Players
-    - NPCs
-    - hero/Villain stats
+    - Playable characters
+
+# OPTIONAL
+## Game genre:
+    - 4-player 3rd person hero fighter/shooter friend-slop 
+    
 ## Tech Stack
     - A-FRAME
     - WebSockets
@@ -17,6 +23,7 @@
 
 ## MVP+:
     - additional levels
-    - randomness for replayability
+    - randomize CSV characteristics
     - tutorial or help system
-    - multiplayer
+    - multiplayer (3v1 or 2v2)
+    - ranks
