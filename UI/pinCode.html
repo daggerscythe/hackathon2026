@@ -6,465 +6,565 @@
   <title>Lobby</title>
   <link rel="stylesheet" href="menu.css" />
   <style>
-    /* ── Layout ─────────────────────────────────────────────────────────── */
-    body {
-      align-items: stretch;
-      justify-content: flex-start;
-    }
+    body { align-items: stretch; justify-content: flex-start; }
 
     #bg-canvas {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
     }
 
-    /* ── Left panel — join instructions ─────────────────────────────────── */
+    /* ── Shared panel base ───────────────────────────────────────────────── */
     .lobby-left {
-      position: relative;
-      z-index: 1;
+      position: relative; z-index: 1;
       padding: 0 0 0 7vw;
-      width: 380px;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      height: 100vh;
-      gap: 0;
+      width: 420px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      justify-content: center; height: 100vh; gap: 0;
     }
-
-    /* Same vertical accent line */
     .lobby-left::before {
-      content: '';
-      position: absolute;
-      left: calc(7vw - 18px);
-      top: 20%;
-      height: 60%;
-      width: 1px;
+      content: ''; position: absolute;
+      left: calc(7vw - 18px); top: 15%; height: 70%; width: 1px;
       background: linear-gradient(180deg, transparent, var(--gold), transparent);
       opacity: 0.6;
     }
 
-    .join-label {
-      font-size: 0.65rem;
-      letter-spacing: 5px;
+    /* ── Step screens (only one visible at a time) ───────────────────────── */
+    .screen { display: none; flex-direction: column; gap: 0; }
+    .screen.active { display: flex; }
+
+    /* ── Text inputs — styled to match the RPG theme ─────────────────────── */
+    .rpg-input {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      letter-spacing: 3px;
       text-transform: uppercase;
-      color: var(--gold-dim);
-      margin-bottom: 10px;
-      animation: fadeSlideUp 0.6s 0.1s ease both;
+      background: rgba(201,168,76,0.06);
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--white);
+      padding: 12px 14px;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      margin-bottom: 14px;
+    }
+    .rpg-input::placeholder { color: var(--white-faint); letter-spacing: 2px; }
+    .rpg-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 12px rgba(201,168,76,0.25);
     }
 
+    /* ── Labels & text ───────────────────────────────────────────────────── */
+    .section-label {
+      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--gold-dim); margin-bottom: 8px;
+      animation: fadeSlideUp 0.5s ease both;
+    }
     .join-url {
       font-family: 'Cinzel Decorative', serif;
-      font-size: clamp(1.4rem, 2.5vw, 2rem);
-      font-weight: 700;
-      color: var(--gold-light);
-      letter-spacing: 3px;
-      margin-bottom: 4px;
+      font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 700;
+      color: var(--gold-light); letter-spacing: 3px; margin-bottom: 4px;
       text-shadow: 0 0 30px rgba(201,168,76,0.5);
-      animation: fadeSlideUp 0.6s 0.2s ease both;
+      animation: fadeSlideUp 0.5s 0.1s ease both;
     }
-
     .join-sub {
-      font-size: 0.68rem;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      color: var(--white-faint);
-      margin-bottom: 28px;
-      animation: fadeSlideUp 0.6s 0.28s ease both;
+      font-size: 0.68rem; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--white-faint); margin-bottom: 28px;
+      animation: fadeSlideUp 0.5s 0.18s ease both;
     }
 
     /* ── Room code display ───────────────────────────────────────────────── */
     .room-code-label {
-      font-size: 0.6rem;
-      letter-spacing: 5px;
-      text-transform: uppercase;
-      color: var(--gold-dim);
-      margin-bottom: 8px;
-      animation: fadeSlideUp 0.6s 0.35s ease both;
+      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--gold-dim); margin-bottom: 8px;
     }
-
     .room-code {
       font-family: 'Cinzel Decorative', serif;
-      font-size: clamp(3rem, 6vw, 4.8rem);
-      font-weight: 700;
-      letter-spacing: 10px;
-      color: var(--white);
-      text-shadow:
-        0 0 40px rgba(201,168,76,0.55),
-        0 0 80px rgba(201,168,76,0.2),
-        0 3px 6px rgba(0,0,0,0.9);
-      line-height: 1;
-      margin-bottom: 6px;
-      animation: fadeSlideUp 0.7s 0.42s ease both;
+      font-size: clamp(3rem, 6vw, 4.8rem); font-weight: 700;
+      letter-spacing: 10px; color: var(--white);
+      text-shadow: 0 0 40px rgba(201,168,76,0.55), 0 0 80px rgba(201,168,76,0.2), 0 3px 6px rgba(0,0,0,0.9);
+      line-height: 1; margin-bottom: 6px;
     }
-
-    /* Thin rule under room code */
     .room-code-rule {
-      width: 60px;
-      height: 1px;
+      width: 60px; height: 1px;
       background: linear-gradient(90deg, var(--gold), transparent);
-      margin-bottom: 32px;
-      animation: fadeSlideUp 0.6s 0.48s ease both;
+      margin-bottom: 28px;
     }
 
-    /* ── Player slots ────────────────────────────────────────────────────── */
+    /* ── Player list ─────────────────────────────────────────────────────── */
     .players-label {
-      font-size: 0.6rem;
-      letter-spacing: 5px;
-      text-transform: uppercase;
-      color: var(--gold-dim);
-      margin-bottom: 12px;
-      animation: fadeSlideUp 0.6s 0.52s ease both;
+      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--gold-dim); margin-bottom: 10px;
     }
-
     .player-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 36px;
-      animation: fadeSlideUp 0.6s 0.58s ease both;
+      display: flex; flex-direction: column; gap: 5px; margin-bottom: 28px;
     }
-
     .player-slot {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 12px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 7px 12px;
       border: 1px solid rgba(201,168,76,0.1);
       background: rgba(201,168,76,0.03);
-      transition: border-color 0.3s ease, background 0.3s ease;
+      transition: border-color 0.3s, background 0.3s;
     }
-
     .player-slot.filled {
       border-color: rgba(201,168,76,0.3);
       background: rgba(201,168,76,0.06);
     }
-
     .player-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: rgba(201,168,76,0.2);
-      flex-shrink: 0;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(201,168,76,0.18); flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
     }
-
     .player-slot.filled .player-dot {
       background: var(--gold);
       box-shadow: 0 0 8px rgba(201,168,76,0.6);
     }
+    .player-name-text {
+      font-family: 'Cinzel', serif; font-size: 0.7rem;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--white-faint); transition: color 0.3s; flex: 1;
+    }
+    .player-slot.filled .player-name-text { color: var(--white-dim); }
+    .player-color-badge {
+      font-size: 0.5rem; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--gold-dim); opacity: 0; transition: opacity 0.4s;
+    }
+    .player-slot.filled .player-color-badge { opacity: 1; }
 
-    .player-name {
-      font-family: 'Cinzel', serif;
-      font-size: 0.72rem;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--white-faint);
-      transition: color 0.3s ease;
+    /* ── Error message ───────────────────────────────────────────────────── */
+    .error-msg {
+      font-family: 'Cinzel', serif; font-size: 0.62rem;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: #e87070; margin-bottom: 10px; min-height: 1.2em;
+      text-shadow: 0 0 10px rgba(232,112,112,0.4);
     }
 
-    .player-slot.filled .player-name {
-      color: var(--white-dim);
+    /* ── Action rows ─────────────────────────────────────────────────────── */
+    .action-row {
+      display: flex; gap: 20px; align-items: center; margin-top: 4px;
     }
-
-    .player-joined-badge {
-      margin-left: auto;
-      font-size: 0.55rem;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--gold-dim);
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-
-    .player-slot.filled .player-joined-badge {
-      opacity: 1;
-    }
-
-    /* ── Bottom actions ──────────────────────────────────────────────────── */
-    .lobby-actions {
-      display: flex;
-      gap: 28px;
-      align-items: center;
-      animation: fadeSlideUp 0.6s 0.72s ease both;
-    }
-
-    .lobby-actions .menu-btn {
-      width: auto;
-      padding: 10px 4px;
-    }
+    .action-row .menu-btn { width: auto; padding: 10px 4px; }
 
     .start-hint {
-      font-size: 0.6rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--white-faint);
-      margin-left: auto;
+      font-size: 0.58rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--white-faint); margin-left: auto;
     }
+    .start-hint span { color: var(--gold-dim); }
 
-    .start-hint span {
-      color: var(--gold-dim);
-    }
-
-    /* ── Right panel — waiting state ─────────────────────────────────────── */
+    /* ── Right panel ─────────────────────────────────────────────────────── */
     .lobby-right {
-      position: relative;
-      z-index: 1;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      justify-content: flex-end;
-      padding: 32px 48px;
-      gap: 12px;
+      position: relative; z-index: 1; flex: 1;
+      display: flex; flex-direction: column;
+      align-items: flex-end; justify-content: flex-end;
+      padding: 32px 48px; gap: 12px;
     }
-
     .waiting-text {
-      font-size: 0.62rem;
-      letter-spacing: 5px;
-      text-transform: uppercase;
+      font-size: 0.62rem; letter-spacing: 5px; text-transform: uppercase;
       color: var(--white-faint);
       animation: pulse 3s ease-in-out infinite;
     }
-
-    /* Player count badge */
-    .player-count {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-
+    .player-count { display: flex; align-items: baseline; gap: 8px; }
     .player-count-num {
-      font-family: 'Cinzel Decorative', serif;
-      font-size: 2.8rem;
-      color: var(--gold-light);
-      text-shadow: 0 0 30px rgba(201,168,76,0.5);
-      line-height: 1;
+      font-family: 'Cinzel Decorative', serif; font-size: 2.8rem;
+      color: var(--gold-light); text-shadow: 0 0 30px rgba(201,168,76,0.5); line-height: 1;
     }
-
     .player-count-label {
-      font-size: 0.65rem;
-      letter-spacing: 4px;
-      text-transform: uppercase;
+      font-size: 0.65rem; letter-spacing: 4px; text-transform: uppercase;
       color: var(--white-faint);
     }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 0.3; }
-      50%       { opacity: 0.7; }
+    .connection-status {
+      font-size: 0.55rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--white-faint);
     }
+    .connection-status.connected { color: rgba(93,232,93,0.7); }
+    .connection-status.error     { color: rgba(232,112,112,0.7); }
+
+    @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
   </style>
 </head>
 <body>
 
   <canvas id="bg-canvas"></canvas>
 
-  <!-- ── Left: join info ──────────────────────────────────────────────── -->
   <div class="lobby-left">
 
-    <p class="join-label">— Join the session</p>
-    <h1 class="join-url">mygame.tv</h1>
-    <p class="join-sub">Enter the room code below</p>
+    <!-- ── SCREEN 1: Enter username + choose host or join ─────────────── -->
+    <div class="screen active" id="screen-entry">
+      <p class="section-label">— Enter your name</p>
+      <h1 class="join-url">mygame.tv</h1>
+      <p class="join-sub">Identify yourself, adventurer</p>
 
-    <p class="room-code-label">Room Code</p>
-    <div class="room-code" id="room-code">KRVN</div>
-    <div class="room-code-rule"></div>
+      <input class="rpg-input" id="username-input" type="text"
+             maxlength="16" placeholder="Your name…"
+             onkeydown="if(event.key==='Enter') proceedFromEntry()" />
 
-    <p class="players-label">— Adventurers</p>
-    <div class="player-list" id="player-list">
-      <!-- slots injected by JS -->
+      <div class="error-msg" id="entry-error"></div>
+
+      <div class="action-row">
+        <button class="menu-btn secondary" onclick="goBack()">← Back</button>
+        <button class="menu-btn" onclick="proceedFromEntry()">Continue →</button>
+      </div>
     </div>
 
-    <div class="lobby-actions">
-      <button class="menu-btn secondary" onclick="goBack()">← Back</button>
-      <button class="menu-btn" id="start-btn" onclick="startGame()">Begin →</button>
-      <span class="start-hint">Waiting for <span id="needed-count">1</span> more</span>
+    <!-- ── SCREEN 2: Host or Join choice ──────────────────────────────── -->
+    <div class="screen" id="screen-choice">
+      <p class="section-label" id="choice-greeting">— Welcome, <span></span></p>
+      <h1 class="join-url">Choose your path</h1>
+      <p class="join-sub" style="margin-bottom:32px">Host a new session or join one</p>
+
+      <div class="action-row" style="flex-direction:column; align-items:flex-start; gap:12px">
+        <button class="menu-btn" onclick="hostGame()">⚔ Host New Game</button>
+        <button class="menu-btn secondary" onclick="showJoinScreen()">✦ Join Existing Game</button>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 3: Join — enter server IP + room code ───────────────── -->
+    <div class="screen" id="screen-join">
+      <p class="section-label">— Join a session</p>
+      <h1 class="join-url">Enter details</h1>
+      <p class="join-sub">Get these from the host</p>
+
+      <label class="section-label" style="margin-bottom:4px">Server address</label>
+      <input class="rpg-input" id="server-ip-input" type="text"
+             placeholder="192.168.1.x  or  localhost"
+             value="localhost" />
+
+      <label class="section-label" style="margin-bottom:4px">Room code</label>
+      <input class="rpg-input" id="room-code-input" type="text"
+             maxlength="4" placeholder="e.g. KRVN"
+             style="text-transform:uppercase; font-size:1.6rem; letter-spacing:8px"
+             oninput="this.value=this.value.toUpperCase()"
+             onkeydown="if(event.key==='Enter') joinGame()" />
+
+      <div class="error-msg" id="join-error"></div>
+
+      <div class="action-row">
+        <button class="menu-btn secondary" onclick="showScreen('screen-choice')">← Back</button>
+        <button class="menu-btn" onclick="joinGame()">Join →</button>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 4: Lobby — waiting room ─────────────────────────────── -->
+    <div class="screen" id="screen-lobby">
+      <p class="section-label">— Room code</p>
+      <div class="room-code" id="room-code-display">····</div>
+      <div class="room-code-rule"></div>
+
+      <p class="players-label">— Adventurers</p>
+      <div class="player-list" id="player-list"></div>
+
+      <div class="error-msg" id="lobby-error"></div>
+
+      <div class="action-row">
+        <button class="menu-btn secondary" onclick="leaveLobby()">← Leave</button>
+        <button class="menu-btn" id="start-btn" onclick="startGame()" style="display:none">Begin →</button>
+        <span class="start-hint" id="start-hint">Waiting for players…</span>
+      </div>
     </div>
 
   </div>
 
-  <!-- ── Right: player count ──────────────────────────────────────────── -->
+  <!-- ── Right panel ────────────────────────────────────────────────── -->
   <div class="lobby-right">
     <div class="player-count">
       <span class="player-count-num" id="count-num">0</span>
       <span class="player-count-label">/ 6 Players</span>
     </div>
-    <p class="waiting-text">Awaiting adventurers…</p>
+    <p class="waiting-text" id="waiting-text">Awaiting adventurers…</p>
+    <p class="connection-status" id="conn-status">Connecting…</p>
   </div>
 
-  <!-- ── Three.js wireframe background ────────────────────────────────── -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    // ── Renderer ─────────────────────────────────────────────────────────
+
+    // ── State ─────────────────────────────────────────────────────────────
+    let clientId   = null;
+    let ws         = null;
+    let username   = '';
+    let currentGameId = null;
+    let isHost     = false;
+    let serverIP   = 'localhost';
+
+    const MAX_PLAYERS = 6;
+    const MIN_START   = 2;
+
+    // ── Screen navigation ─────────────────────────────────────────────────
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // ── SCREEN 1: validate username, then connect WS ──────────────────────
+    function proceedFromEntry() {
+      const val = document.getElementById('username-input').value.trim();
+      if (!val) { document.getElementById('entry-error').textContent = 'A name is required, adventurer.'; return; }
+      username = val;
+      document.getElementById('entry-error').textContent = '';
+
+      // Update greeting
+      document.querySelector('#choice-greeting span').textContent = username;
+
+      showScreen('screen-choice');
+    }
+
+    function showJoinScreen() { showScreen('screen-join'); }
+
+    // ── Connect WebSocket to a given IP ───────────────────────────────────
+    function connectWS(ip, onReady) {
+      if (ws) { ws.close(); ws = null; }
+      serverIP = ip || 'localhost';
+      const url = `ws://${serverIP}:9090`;
+
+      setStatus('Connecting…', '');
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        setStatus('Connected', 'connected');
+      };
+
+      ws.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        handleMessage(msg, onReady);
+      };
+
+      ws.onerror = () => {
+        setStatus('Connection failed', 'error');
+        showError('join-error', `Cannot reach server at ${serverIP}:9090 — check the address.`);
+      };
+
+      ws.onclose = () => {
+        setStatus('Disconnected', 'error');
+      };
+    }
+
+    function handleMessage(msg, onReady) {
+      switch (msg.method) {
+
+        case 'connect':
+          clientId = msg.clientId;
+          setStatus('Connected', 'connected');
+          if (onReady) onReady();
+          break;
+
+        case 'create':
+          currentGameId = msg.gameId;
+          document.getElementById('room-code-display').textContent = msg.gameId;
+          break;
+
+        case 'join':
+        case 'joined':
+          currentGameId = msg.gameId;
+          document.getElementById('room-code-display').textContent = msg.gameId;
+          renderLobby(msg.game);
+          showScreen('screen-lobby');
+          break;
+
+        case 'update':
+          if (msg.game) renderLobby(msg.game);
+          break;
+
+        case 'start':
+          window.location.href = 'characterSelection.html';
+          break;
+
+        case 'playerLeft':
+          if (msg.game) renderLobby(msg.game);
+          break;
+
+        case 'error':
+          // Surface errors on whichever screen is active
+          showError('join-error', msg.message);
+          showError('lobby-error', msg.message);
+          break;
+      }
+    }
+
+    // ── Host a new game ───────────────────────────────────────────────────
+    function hostGame() {
+      isHost = true;
+      serverIP = 'localhost';
+      clearErrors();
+      buildEmptySlots();
+      showScreen('screen-lobby');
+      setStatus('Connecting…', '');
+
+      connectWS('localhost', () => {
+        sendWS({ method: 'create', clientId, username });
+        // Show start button only for host
+        document.getElementById('start-btn').style.display = 'inline';
+      });
+    }
+
+    // ── Join an existing game ─────────────────────────────────────────────
+    function joinGame() {
+      const ip   = document.getElementById('server-ip-input').value.trim() || 'localhost';
+      const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+      clearErrors();
+
+      if (!code || code.length !== 4) {
+        showError('join-error', 'Enter the 4-letter room code.');
+        return;
+      }
+
+      isHost = false;
+      buildEmptySlots();
+
+      connectWS(ip, () => {
+        sendWS({ method: 'join', clientId, username, gameId: code });
+      });
+    }
+
+    // ── Start the game (host only) ────────────────────────────────────────
+    function startGame() {
+      const count = document.querySelectorAll('.player-slot.filled').length;
+      if (count < MIN_START) {
+        showError('lobby-error', `Need at least ${MIN_START} adventurers.`);
+        return;
+      }
+      sendWS({ method: 'start', clientId, gameId: currentGameId });
+    }
+
+    function leaveLobby() {
+      if (ws) ws.close();
+      showScreen('screen-choice');
+    }
+
+    // ── Render lobby player list ──────────────────────────────────────────
+    function buildEmptySlots() {
+      const list = document.getElementById('player-list');
+      list.innerHTML = '';
+      for (let i = 0; i < MAX_PLAYERS; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'player-slot';
+        slot.id = `slot-${i}`;
+        slot.innerHTML = `
+          <div class="player-dot"></div>
+          <span class="player-name-text">Awaiting…</span>
+          <span class="player-color-badge"></span>
+        `;
+        list.appendChild(slot);
+      }
+      updateCount(0);
+    }
+
+    function renderLobby(game) {
+      const players = game.players || [];
+      const list = document.getElementById('player-list');
+
+      // Rebuild slots
+      list.innerHTML = '';
+      for (let i = 0; i < MAX_PLAYERS; i++) {
+        const p = players[i];
+        const slot = document.createElement('div');
+        slot.className = 'player-slot' + (p ? ' filled' : '');
+        slot.innerHTML = `
+          <div class="player-dot"></div>
+          <span class="player-name-text">${p ? p.username : 'Awaiting…'}</span>
+          <span class="player-color-badge">${p ? p.color : ''}</span>
+        `;
+        list.appendChild(slot);
+      }
+
+      updateCount(players.length);
+
+      // Update hint
+      const hint = document.getElementById('start-hint');
+      const needed = Math.max(0, MIN_START - players.length);
+      if (needed <= 0) {
+        hint.innerHTML = isHost ? `<span>Ready — click Begin</span>` : `<span>Waiting for host…</span>`;
+      } else {
+        hint.innerHTML = `Waiting for <span>${needed}</span> more`;
+      }
+    }
+
+    function updateCount(n) {
+      document.getElementById('count-num').textContent = n;
+    }
+
+    // ── WS helper ─────────────────────────────────────────────────────────
+    function sendWS(payload) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+      }
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────────
+    function setStatus(text, cls) {
+      const el = document.getElementById('conn-status');
+      el.textContent = text;
+      el.className = 'connection-status ' + cls;
+    }
+
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = msg;
+    }
+
+    function clearErrors() {
+      ['entry-error','join-error','lobby-error'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+      });
+    }
+
+    function goBack()   { window.location.href = 'mode-select.html'; }
+
+    // ── Three.js wireframe crown background ───────────────────────────────
     const canvas = document.getElementById('bg-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
     camera.position.set(0, 0, 14);
 
     const wireBright = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.18 });
     const wireMid    = new THREE.MeshBasicMaterial({ color: 0xd4b86a, wireframe: true, transparent: true, opacity: 0.10 });
     const wireFaint  = new THREE.MeshBasicMaterial({ color: 0xe8d090, wireframe: true, transparent: true, opacity: 0.055 });
 
-    // Crown — thematically fitting for a lobby/waiting room
     const crownGroup = new THREE.Group();
-
-    // Base band
-    const bandGeo = new THREE.CylinderGeometry(2.0, 1.8, 0.6, 16, 4, true);
-    crownGroup.add(new THREE.Mesh(bandGeo, wireMid));
-
-    // Crown points (5 spikes)
+    crownGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(2.0, 1.8, 0.6, 16, 4, true), wireMid));
     for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2;
-      const spikeGeo = new THREE.CylinderGeometry(0.04, 0.22, 1.6 + (i % 2) * 0.7, 4, 5);
-      const spike = new THREE.Mesh(spikeGeo, wireBright);
-      spike.position.set(Math.cos(angle) * 1.85, 0.9 + (i % 2) * 0.35, Math.sin(angle) * 1.85);
-      spike.rotation.z = Math.sin(angle) * 0.15;
-      spike.rotation.x = -Math.cos(angle) * 0.15;
+      const a = (i/5)*Math.PI*2;
+      const spike = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.22, 1.6+(i%2)*0.7, 4, 5), wireBright);
+      spike.position.set(Math.cos(a)*1.85, 0.9+(i%2)*0.35, Math.sin(a)*1.85);
+      spike.rotation.z = Math.sin(a)*0.15; spike.rotation.x = -Math.cos(a)*0.15;
       crownGroup.add(spike);
-    }
-
-    // Gem spheres on tips
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2;
-      const h = 1.8 + (i % 2) * 0.7;
-      const gemGeo = new THREE.SphereGeometry(0.18, 6, 5);
-      const gem = new THREE.Mesh(gemGeo, wireBright);
-      gem.position.set(Math.cos(angle) * 1.82, h + 0.05, Math.sin(angle) * 1.82);
+      const gem = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), wireBright);
+      gem.position.set(Math.cos(a)*1.82, 1.85+(i%2)*0.7+0.05, Math.sin(a)*1.82);
       crownGroup.add(gem);
     }
-
-    // Base ring
-    const baseRingGeo = new THREE.TorusGeometry(1.85, 0.07, 5, 32);
-    const baseRing = new THREE.Mesh(baseRingGeo, wireBright);
-    baseRing.rotation.x = Math.PI * 0.5;
-    baseRing.position.y = -0.3;
+    const baseRing = new THREE.Mesh(new THREE.TorusGeometry(1.85, 0.07, 5, 32), wireBright);
+    baseRing.rotation.x = Math.PI*0.5; baseRing.position.y = -0.3;
     crownGroup.add(baseRing);
-
     crownGroup.position.set(4.5, 0.5, -2.5);
     scene.add(crownGroup);
 
-    // Drifting planes
     const floaters = [];
     for (let i = 0; i < 7; i++) {
-      const geo = new THREE.PlaneGeometry(
-        3 + Math.random() * 6, 2 + Math.random() * 5,
-        Math.floor(3 + Math.random() * 5), Math.floor(3 + Math.random() * 5)
-      );
+      const geo = new THREE.PlaneGeometry(3+Math.random()*6, 2+Math.random()*5, Math.floor(3+Math.random()*5), Math.floor(3+Math.random()*5));
       const mesh = new THREE.Mesh(geo, wireFaint);
-      mesh.position.set(
-        (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 16,
-        -9 - Math.random() * 12
-      );
-      mesh.rotation.set(
-        (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5, Math.random() * Math.PI
-      );
-      mesh.userData.axis = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
-      mesh.userData.speed = 0.0005 + Math.random() * 0.001;
-      scene.add(mesh);
-      floaters.push(mesh);
+      mesh.position.set((Math.random()-0.5)*26,(Math.random()-0.5)*16,-9-Math.random()*12);
+      mesh.rotation.set((Math.random()-0.5)*1.5,(Math.random()-0.5)*1.5,Math.random()*Math.PI);
+      mesh.userData.axis = new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
+      mesh.userData.speed = 0.0005+Math.random()*0.001;
+      scene.add(mesh); floaters.push(mesh);
     }
 
     let t = 0;
     function animate() {
-      requestAnimationFrame(animate);
-      t += 0.007;
-      crownGroup.rotation.y = t * 0.18;
-      crownGroup.position.y = 0.5 + Math.sin(t * 0.5) * 0.3;
+      requestAnimationFrame(animate); t += 0.007;
+      crownGroup.rotation.y = t*0.18;
+      crownGroup.position.y = 0.5+Math.sin(t*0.5)*0.3;
       for (const f of floaters) f.rotateOnAxis(f.userData.axis, f.userData.speed);
       renderer.render(scene, camera);
     }
     animate();
 
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = window.innerWidth/window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // ── Lobby logic ───────────────────────────────────────────────────────
-    const MAX_PLAYERS = 6;
-    const MIN_TO_START = 2;
-
-    // Generate a random 4-letter room code
-    function genCode() {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-      return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    }
-    document.getElementById('room-code').textContent = genCode();
-
-    // Build player slots
-    const playerData = [];
-    const listEl = document.getElementById('player-list');
-
-    for (let i = 0; i < MAX_PLAYERS; i++) {
-      const slot = document.createElement('div');
-      slot.className = 'player-slot';
-      slot.id = `slot-${i}`;
-      slot.innerHTML = `
-        <div class="player-dot"></div>
-        <span class="player-name">Awaiting…</span>
-        <span class="player-joined-badge">Joined</span>
-      `;
-      listEl.appendChild(slot);
-      playerData.push({ filled: false, name: '' });
-    }
-
-    // Fake names that join over time (simulating Jackbox-style joining)
-    const fakeNames = ['Aragorn', 'Seraphine', 'Duskbane', 'Ironveil', 'Calyx', 'Mordechai'];
-    let joinIndex = 0;
-
-    function addPlayer() {
-      if (joinIndex >= MAX_PLAYERS) return;
-      const i = joinIndex++;
-      playerData[i] = { filled: true, name: fakeNames[i] };
-
-      const slot = document.getElementById(`slot-${i}`);
-      slot.querySelector('.player-name').textContent = fakeNames[i];
-      slot.classList.add('filled');
-
-      updateCounters();
-
-      // Schedule next player join randomly
-      if (joinIndex < MAX_PLAYERS) {
-        setTimeout(addPlayer, 2500 + Math.random() * 3500);
-      }
-    }
-
-    function updateCounters() {
-      const count = playerData.filter(p => p.filled).length;
-      document.getElementById('count-num').textContent = count;
-
-      const needed = Math.max(0, MIN_TO_START - count);
-      const hintEl = document.querySelector('.start-hint');
-      if (needed <= 0) {
-        hintEl.innerHTML = `<span>Ready to begin</span>`;
-      } else {
-        hintEl.innerHTML = `Waiting for <span id="needed-count">${needed}</span> more`;
-      }
-    }
-
-    // Start first player joining after 2s
-    setTimeout(addPlayer, 2000);
-
-    function startGame() {
-      const count = playerData.filter(p => p.filled).length;
-      if (count < MIN_TO_START) {
-        alert(`Need at least ${MIN_TO_START} adventurers to begin.`);
-        return;
-      }
-      alert('The adventure begins…');
-      window.location.href = "characterSelection.html"
-    }
-
-    function goBack() {
-      window.location.href = 'mode-select.html';
-    }
   </script>
-
 </body>
 </html>
