@@ -120,7 +120,7 @@ function createCharacter(id, role, chosenClass, csvRow, entityId) {
 function addCharacter(id, role, chosenClass, csvRow, entityId) {
     const character = createCharacter(id, role, chosenClass, csvRow, entityId);
     characters.set(id, character);
-
+    initCooldowns(id);
     console.log(`Registered: ${character.name} [${role} / ${chosenClass}]`);
     return character;
 }
@@ -249,10 +249,268 @@ function applyHeal(healerId, healeeId) {
 // =====================================
 // Match Manager
 // =====================================
+const EXP_REWARD = {
+    win: 100,
+    loss: 25,
+};
+
+let matchState = null; // current match's metadata
+
+/**
+ * all players selected characters, time to start the battle
+ * @param {string} villainId
+ * @param {string[]} heroIds
+ */
+function initMatch(villainId, heroIds) {
+    if (getState() !== STATES.CHARACTER_SELECT) {
+        console.warn('initMatch called outside of CHARACTER_SELECT state');
+        return;
+    }
+}
+
+matchState = {
+    villainId,
+    heroIds,
+    winner: null, // 'hero' | 'villain'
+    startTime: Date.now(),
+    endTime: null,
+};
+
+// start listening for deaths
+document.addEventListener('game:characterDefeated', onCharacterDefeated);
+
+transitionTo(STATES.BATTLE);
+console.log(`Match started. Villain: ${villainId} vs Heroes: ${heroIds.join(', ')}`);
+
+document.dispatchEvent(new CustomEvent('game:matchStarted', {
+    detail: { villainId, heroIds }
+}));
+
+function onCharacterDefeated(event) {
+    checkWin();
+}
+
+function checkWin() {
+    if (!matchState || getState() !== STATES.BATTLE) return;
+
+    const villainDead = !isAlive(matchState.villainId);
+    const HeroesDead = matchState.heroIds.every(id => !isAlive(id));
+
+    if (villainDead) {
+        endMatch('hero');
+    } else if (HeroesDead) {
+        endMatch('villain');
+    }
+}
+
+/**
+ * end match, award exp, fire game over event
+ * @param {string} winnerRole - 'hero' | 'villain'
+ */
+function endMatch(winnerRole) {
+    if (!matchState) return;
+
+    matchState.winner = winnerRole;
+    matchState.endTime = Date.now();
+
+    // stop death listener
+    document.removeEventListener('game:characterDefeated', onCharacterDefeated);
+
+    awardExp(winnerRole);
+    transitionTo(STATES.GAME_OVER);
+
+    console.log(`Match over. ${winnerRole} wins.`);
+
+    document.dispatchEvent(new CustomEvent('game:matchOver', {
+        detail: {
+            winner: winnerRole,
+            villainId: matchState.villainId,
+            heroIds: matchState.heroIds,
+            duration: matchState.endTime - matchState.startTime,
+        }
+    }));
+
+    matchState = null;
+}
+
+function awardExp(winnerRole) {
+    characters.forEach(char => {
+        const won = char.role === winnerRole;
+        char.exp += won ? EXP_REWARD.win : EXP_REWARD.loss;
+
+        console.log(
+            `${char.name} earned ${won ? EXP_REWARD.win : EXP_REWARD.loss} EXP` + 
+            ` (total: ${char.exp})`
+        );
+
+        document.dispatchEvent(new CustomEvent('game:expAwarded', {
+            detail: {
+                characterId: char.id,
+                amount:      won ? EXP_REWARD.win : EXP_REWARD.loss,
+                total:       char.exp,
+            }
+        }));
+    });
+}
+
+function resetMatch() {
+    matchState = null;
+    clearCharacters();
+    transitionTo(STATES.CHARACTER_SELECT);
+}
 
 // =====================================
 // Combat System
 // =====================================
+const COOLDOWNS = {
+    magic: 3000, // in ms
+    heal: 5000,
+};
+
+const CLASS_ATTACK_TYPE = {
+    // hero classes
+    tank: 'strength',
+    dps: 'strength',
+    support: 'strength',
+    mage: 'magic',
+    // villain classes
+    brute: 'strength',
+    agile: 'strength',
+    villain_mage: 'magic',
+};
+
+// key: characterId, value: { magic: timestamp, heal: timestamp }
+const cooldownTracker = new Map();
+
+/**
+ * initialize cooldown tracking upon initial join
+ * called inside addCharacter
+ */
+function initCooldowns(id) {
+    cooldownTracker.set(id, {
+        magic: 0,
+        heal: 0,
+    });
+}
+
+/**
+ * returns true if ability still on cooldown
+ * @param {string} id
+ * @param {string} ability - 'magic' | 'heal'
+ */
+function isOnCooldown(id, ability) {
+    const tracker = cooldownTracker.get(id);
+    if (!tracker) return false;
+
+    const elapsed = Date.now() - tracker[ability];
+    return elapsed < COOLDOWNS[ability];
+}
+
+/**
+ * returns how many ms remain for UI
+ * @param {string} id 
+ * @param {string} ability 
+ */
+function getCooldownRemaining(id, ability) {
+    const tracker = cooldownTracker.get(id);
+    if (!tracker) return 0;
+
+    const elapsed = Date.now() - tracker[ability];
+    return Math.max(0, COOLDOWNS[ability] - elapsed);
+}
+
+// Attack Methods
+/**
+ * melee has no cooldown
+ * @param {string} attackerId 
+ * @param {string} defenderId 
+ */
+function performMelee(attackerId, defenderId) {
+    const attacker = characters.get(attackerId);
+    const defender = characters.get(defenderId);
+
+    if (!attacker || !defender || !attacker.isAlive || !defender.isAlive || getState() !== STATES.BATTLE) return;
+
+    applyHit(attackerId, defenderId, 'strength');
+
+    document.dispatchEvent(new CustomEvent('game:meleeFired', {
+        detail: {
+            attackerId,
+            defenderId,
+        }
+    }));
+}
+
+/**
+ * magic attack has cooldown
+ * @param {string} attackerId 
+ * @param {object} direction - {x,y,z} unit vector of aim directin
+ */
+function performMagic(attackerId, direction) {
+    const attacker = characters.get(attackerId);
+
+    if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return;
+    if (isOnCooldown(attackerId, 'magic')) {
+        const remaining = (getCooldownRemaining(attackerId, 'magic') / 1000).toFixed(1);
+        console.log(`${attacker.name} magic on cooldown - ${remaining}s remaining`);
+        return;
+    }
+
+    cooldownTracker.get(attackerId).magic = Date.now();
+    console.log(`${attacker.name} fired magic towards ${JSON.stringify(direction)}`);
+
+    document.dispatchEvent(new CustomEvent('game:magicFired', {
+        detail: {
+            attackerId,
+            direction,
+        }
+    }));
+}
+
+/**
+ * heal has cooldown
+ * @param {string} healerId 
+ * @param {string} healeeId 
+ */
+function performHeal(healerId, healeeId) {
+    const healer = characters.get(healerId);
+    const healee = characters.get(healeeId);
+
+    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
+    if (isOnCooldown(healerId, 'heal')) {
+        const remaining = (getCooldownRemaining(healerId, 'heal') / 1000).toFixed(1);
+        console.log(`${healer.name} heal on cooldown - ${remaining}s remaining`);
+        return;
+    }
+
+    cooldownTracker.get(healerId).heal = Date.now();
+    applyHeal(healerId, healeeId);
+
+    document.dispatchEvent(new CustomEvent('game:healPerformed', {
+        detail: {
+            healerId,
+            healeeId,
+        }
+    }));
+}
+
+/**
+ * wrapper function to determine what attack type to call
+ * @param {string} attackerId 
+ * @param {string} defenderId - required for melee, ignored for magic
+ * @param {object} direction  - required for magic, ignored for melee
+ */
+function performAttack(attackerId, defenderId, direction) {
+    const attacker = characters.get(attackerId);
+    if (!attacker || !attacker.isAlive) return; 
+    const attackType = CLASS_ATTACK_TYPE[attacker.chosenClass];
+
+    if (attackType === 'magic') {
+        performMagic(attackerId, direction);
+    } else {
+        performMelee(attackerId, defenderId);
+    }
+}
 
 // =====================================
 // EXP & Progression 
