@@ -8,7 +8,10 @@
     - Players
     - NPCs
     - hero/Villain stats
-
+## Tech Stack
+    - A-FRAME
+    - WebSockets
+    
 ## Inutitive user UI & mechanisms:
 
 
