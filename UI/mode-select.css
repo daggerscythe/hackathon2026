@@ -1,56 +1,202 @@
-.mode-container {
-  width: 520px;
-  padding: 40px 30px;
-  border-radius: 22px;
-  background: rgba(20, 33, 61, 0.82);
-  border: 2px solid rgba(217, 221, 227, 0.35);
-  box-shadow: 0 18px 45px var(--shadow);
-  backdrop-filter: blur(8px);
-  text-align: center;
+/* mode-select.css — inherits menu.css variables & base styles */
+
+/* ── Page layout ─────────────────────────────────────────────────────────── */
+body {
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
-.mode-grid {
+.mode-container {
+  position: relative;
+  z-index: 1;
+  padding: 0 0 0 7vw;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 24px;
+  justify-content: center;
+  height: 100vh;
+  gap: 0;
+}
+
+/* Same vertical gold accent line as menu */
+.mode-container::before {
+  content: '';
+  position: absolute;
+  left: calc(7vw - 18px);
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--gold), transparent);
+  opacity: 0.6;
+}
+
+/* ── Section label above cards ───────────────────────────────────────────── */
+.mode-eyebrow {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 10px;
+  animation: fadeSlideUp 0.7s 0.1s ease both;
+}
+
+/* ── Horizontal cards row ────────────────────────────────────────────────── */
+.mode-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  margin-bottom: 32px;
 }
 
 .mode-card {
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 2px solid rgba(217, 221, 227, 0.35);
-  background: rgba(217, 221, 227, 0.08);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  position: relative;
+  width: 190px;
+  padding: 24px 20px 20px;
   cursor: pointer;
+  overflow: hidden;
+
+  /* Thin gold border, very transparent by default */
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  background: rgba(201, 168, 76, 0.03);
+
+  transition: border-color 0.22s ease, background 0.22s ease, transform 0.22s ease;
+
+  animation: fadeSlideUp 0.6s ease both;
 }
 
-.mode-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.28);
-  border-color: var(--primary);
+.mode-card:nth-child(1) { animation-delay: 0.25s; }
+.mode-card:nth-child(2) { animation-delay: 0.37s; }
+.mode-card:nth-child(3) { animation-delay: 0.49s; }
+
+/* Top horizontal gold line that grows on hover / selected */
+.mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  height: 1px;
+  width: 0;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  transition: width 0.3s ease;
+}
+
+/* Faint watermark glyph */
+.mode-card::after {
+  content: attr(data-glyph);
+  position: absolute;
+  bottom: -8px;
+  right: 8px;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 4.5rem;
+  color: rgba(201, 168, 76, 0.04);
+  line-height: 1;
+  pointer-events: none;
+  transition: color 0.22s ease;
+}
+
+.mode-card:hover,
+.mode-card.selected {
+  border-color: rgba(201, 168, 76, 0.45);
+  background: rgba(201, 168, 76, 0.06);
+  transform: translateY(-3px);
+}
+
+.mode-card:hover::before,
+.mode-card.selected::before {
+  width: 100%;
+}
+
+.mode-card:hover::after,
+.mode-card.selected::after {
+  color: rgba(201, 168, 76, 0.08);
+}
+
+/* Selected gets a slightly brighter border */
+.mode-card.selected {
+  border-color: var(--gold-dim);
+}
+
+/* ── Card inner content ───────────────────────────────────────────────────── */
+.mode-card-icon {
+  font-size: 1.4rem;
+  margin-bottom: 14px;
+  color: var(--gold-dim);
+  transition: color 0.22s ease;
+}
+
+.mode-card:hover .mode-card-icon,
+.mode-card.selected .mode-card-icon {
+  color: var(--gold);
 }
 
 .mode-title {
-  color: var(--primary);
-  font-size: 1.2rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
   font-weight: 700;
-  margin-bottom: 6px;
-  letter-spacing: 1px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--white-dim);
+  margin-bottom: 10px;
+  transition: color 0.22s ease;
+}
+
+.mode-card:hover .mode-title,
+.mode-card.selected .mode-title {
+  color: var(--gold-light);
+  text-shadow: 0 0 18px rgba(201, 168, 76, 0.4);
+}
+
+/* Thin horizontal rule under title */
+.mode-title-rule {
+  width: 24px;
+  height: 1px;
+  background: var(--gold-dim);
+  margin-bottom: 10px;
+  transition: width 0.25s ease, background 0.22s ease;
+}
+
+.mode-card:hover .mode-title-rule,
+.mode-card.selected .mode-title-rule {
+  width: 40px;
+  background: var(--gold);
 }
 
 .mode-description {
-  color: rgba(238, 242, 247, 0.78);
-  font-size: 0.95rem;
-  line-height: 1.4;
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  line-height: 1.65;
+  letter-spacing: 0.5px;
+  color: var(--white-faint);
+  transition: color 0.22s ease;
 }
 
+.mode-card:hover .mode-description,
+.mode-card.selected .mode-description {
+  color: rgba(240, 236, 228, 0.45);
+}
+
+/* ── Bottom action row ────────────────────────────────────────────────────── */
 .mode-actions {
   display: flex;
-  gap: 14px;
-  margin-top: 26px;
+  align-items: center;
+  gap: 28px;
+  animation: fadeSlideUp 0.6s 0.65s ease both;
 }
 
+.mode-status {
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--white-faint);
+  margin-right: 8px;
+}
+
+.mode-status span {
+  color: var(--gold);
+}
+
+/* Reuse .menu-btn from menu.css — override width so they size naturally */
 .mode-actions .menu-btn {
-  flex: 1;
+  width: auto;
+  padding: 10px 4px;
 }

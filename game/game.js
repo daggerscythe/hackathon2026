@@ -1,0 +1,267 @@
+// =====================================
+// Game State Machine
+// =====================================
+const STATES = {
+    CHARACTER_SELECT: 'CHARACTER_SELECT',
+    BATTLE: 'BATTLE',
+    GAME_OVER: 'GAME_OVER',
+};
+
+const VALID_TRANSITIONS = {
+    [STATES.CHARACTER_SELECT]: [STATES.BATTLE],
+    [STATES.BATTLE]: [STATES.GAME_OVER],
+    [STATES.GAME_OVER]: [STATES.CHARACTER_SELECT],
+};
+
+let currentState = STATES.CHARACTER_SELECT;
+
+function transitionTo(newState) {
+    const allowed = VALID_TRANSITIONS[currentState];
+
+    if (!allowed.includes(newState)) {
+        console.warn(`Invalid transition: ${currentState} --> ${newState}`);
+        return false;
+    }
+
+    console.log(`State: ${currentState} --> ${newState}`);
+
+    // let other files know of state change
+    const previousState = currentState;
+    currentState = newState;
+    document.dispatchEvent(new CustomEvent('game:stateChange', {
+        detail: { previous: previousState, current: newState}
+    }));
+
+    return true;
+}
+
+function getState() {
+    return currentState;
+}
+
+// =====================================
+// Player Character Data Model
+// =====================================
+
+// Constants
+
+const BASE_HEALTH = 100;
+const BASE_DAMAGE = 10;
+const VILLAIN_HEALTH_PER_KILL = 50;
+const BASE_HEAL_RATE = 5;
+
+const characterPools = {
+    hero: { tank: [], dps: [], support: [], mage: [] },
+    villain: { brute: [], agile: [], mage: [] },
+};
+
+const characters = new Map(); // player registry
+let heroesAlive = 3; // for villain scaling
+
+function populateCharacterPools(classifiedData) {
+    Object.assign(characterPools.hero, classifiedData.hero);
+    Object.assign(characterPools.villain, classifiedData.villain);
+    console.log(`Character pools ready: `, characterPools);
+}
+
+// randomly pick a charater from the pool
+function pickRandomCharater(role, chosenClass) {
+    const pool = characterPools[role]?.[chosenClass];
+
+    if (!pool || pool.length === 0) {
+        console.warn(`No characters available for ${role} / ${chosenClass}`);
+        return null;
+    }
+
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    return pool[randomIndex]; // returns the raw CSV row
+}
+
+// Villain stat multiplier scales down as heroes are defeated
+// 3 heroes alive -> 3x, 1 alive -> 1.5x
+
+/**
+    * Factory function - builds a character entity from CSV data
+    * @param {string} id - unique id 
+    * @param {string} role - 'hero' | 'villain'
+    * @param {string} chosenClass - tank | dps | support | mage OR brute | agile | mage
+    * @param {object} csvRow - randomly picked row
+    * @param {string} entityId - A-Frame entity id in index.html
+*/
+
+function createCharacter(id, role, chosenClass, csvRow, entityId) {
+    return {
+        id,
+        role,
+        chosenClass,
+        entityId,
+
+        // identity (from CSV)
+        name: csvRow.name,
+
+        // all players start with same base health
+        maxHealth: BASE_HEALTH,
+        health: BASE_HEALTH,
+        
+        // CSV stats
+        strength: csvRow.strength / 100, // melee dmg mult
+        magic: csvRow.magic / 100, // range dmg mult
+        defense: csvRow.defense / 100, // dmg reduction mult
+        speed: csvRow.speed / 100, // movement speed mult
+        power: csvRow.power / 100, // healing mult
+
+        // runtime states
+        isAlive: true,
+        exp: 0,
+    };
+}
+
+// register finalized character into active match
+function addCharacter(id, role, chosenClass, csvRow, entityId) {
+    const character = createCharacter(id, role, chosenClass, csvRow, entityId);
+    characters.set(id, character);
+
+    console.log(`Registered: ${character.name} [${role} / ${chosenClass}]`);
+    return character;
+}
+
+function clearCharacters() {
+    characters.clear();
+    heroesAlive = 3;
+}
+
+// Combat Helpers
+
+function isAlive(id) {
+    const char = characters.get(id);
+    return char ? char.isAlive : false;
+};
+
+// damage calculation math
+/**
+ * Formula:
+ * raw damage = BASE_DAMAGE * attacker dmg mult
+ * damage taken = raw damage * (1 - defender dfns) 
+ * @param {string} attackType - 'strength' (melee) | 'magic' (range)
+ */
+function calcDamage(attacker, defender, attackType) {
+    const statMult = attacker[attackType]; // 0-1
+    const rawDamage = BASE_DAMAGE * statMult;
+    const damageTaken = rawDamage * (1 - defender.defense);
+    return Math.max(0.1, damageTaken); 
+}
+
+/**
+ * apply a hit from attacker to defender, fire events for UI updates & death
+ * @param {string} attackerId
+ * @param {string} defenderId
+ * @param {string} attackerType - 'strength' | 'magic'
+ */
+
+function applyHit(attackerId, defenderId, attackType) {
+    const attacker = characters.get(attackerId);
+    const defender = characters.get(defenderId);
+
+    if (!attacker || !defender || !defender.isAlive) return;
+
+    const damage = calcDamage(attacker, defender, attackType);
+    defender.health = Math.max(0, defender.health - damage);
+
+    console.log(
+        `${attacker.name} hit ${defender.name} for ${damage.toFixed(2)}` + 
+        `(${attackType}) -> ${defender.health.toFixed(1)}/${defender.maxHealth} HP`
+    );
+
+    document.dispatchEvent(new CustomEvent('game:healthChanged', {
+        detail: {
+            characterId: defenderId,
+            health: defender.health,
+            maxHealth: defender.maxHealth,
+        }
+    }));
+
+    if (defender.health <= 0) {
+        handleDeath(defenderId);
+    }
+}
+
+function handleDeath(id) {
+    const char = characters.get(id);
+    if (!char) return;
+
+    char.isAlive = false;
+
+    document.dispatchEvent(new CustomEvent('game:characterDefeated', {
+        detail: { id, role: char.role }
+    }));
+
+    // villain gets health for every killed player
+    if (char.role === 'hero') {
+        heroesAlive--;
+
+        const villain = [...characters.values()].find(c => c.role === 'villain');
+        if (villain && villain.isAlive) {
+            villain.health = Math.min(villain.maxHealth, villain.health + VILLAIN_HEALTH_PER_KILL);
+        
+            console.log(
+                `Villain gained ${VILLAIN_HEALTH_PER_KILL} HP from kill → ` +
+                `${villain.health.toFixed(1)}/${villain.maxHealth} HP`
+            );
+
+            document.dispatchEvent(new CustomEvent('game:healthChanged', {
+                detail: {
+                    characterId: villain.id,
+                    health:      villain.health,
+                    maxHealth:   villain.maxHealth,
+                }
+            }));
+        }
+    }
+}
+
+/**
+ * apply one tick of healing every second
+ * heal per tick = BASE_HEAL_RATE * power mult
+ * @param {string} healerId - the one dealing healing
+ * @param {strign} healeeId - the one being healed
+ * 
+ * for self-heal, applyHeal('hero-2', 'hero-2')
+ */
+function applyHeal(healerId, healeeId) {
+    const healer = characters.get(healerId);
+    const healee = characters.get(healeeId);
+    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
+
+    const healAmt = BASE_HEAL_RATE * healer.power;
+    healee.health = Math.min(healee.maxHealth, healee.health + healAmt);
+
+    console.log(`${healer.name} healed ${healee.name} for ${healAmt.toFixed(2)} → ${healee.health.toFixed(1)}/${healee.maxHealth} HP`);
+
+    document.dispatchEvent(new CustomEvent('game:healthChanged', {
+        detail: {
+            characterId: healeeId,
+            health:      healee.health,
+            maxHealth:   healee.maxHealth,
+        }
+    }));
+}
+
+// =====================================
+// Match Manager
+// =====================================
+
+// =====================================
+// Combat System
+// =====================================
+
+// =====================================
+// EXP & Progression 
+// =====================================
+
+// =================================================
+// Event Bus - communicating with other files
+// =================================================
+
+// =================================================
+// A-Frame Hooks - moving entities, animations, etc
+// =================================================
