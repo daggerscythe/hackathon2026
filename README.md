@@ -11,6 +11,12 @@
     - Playable characters
 
 # DETAILS
+    - Earnest: UI
+    - Bisesh: models
+    - Dani: game logic
+    - Ember: CSV integration
+    - Remaining: multiplayer (EE)
+    
 # Asset Acquisition
     - Map or Stage to be used
     - Character 1 Acquisition (TBD)
