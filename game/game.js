@@ -287,7 +287,7 @@ function applyHit(attackerId, defenderId, attackType) {
 
 function handleDeath(id) {
     const char = characters.get(id);
-    if (!char) return;
+    if (!char || getState() !== STATES.BATTLE) return;
 
     char.isAlive = false;
 

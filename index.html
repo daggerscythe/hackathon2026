@@ -9,6 +9,8 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
   <link rel="stylesheet" href="UI/ui.css" />
+  <script src="game/game.js"></script>
+  <script src="UI/menu.js"></script>
 </head>
 <body>
 
@@ -32,18 +34,18 @@
 
     <!-- Assets -->
     <a-assets>
+      <a-asset-item id="arena" src="models/low_poly_landscape.glb"></a-asset-item>
     </a-assets>
 
 
     <!-- Stage / Map -->
     <a-entity id="stage">
-      <!-- Placeholder floor -->
-      <a-plane
-        position="0 0 0"
-        rotation="-90 0 0"
-        width="40" height="40"
-        color="#1a1a2e"
-      ></a-plane>
+      <a-gltf-model
+        src="#arena"
+        position="40 0 -375"
+        rotation="0 0 0"
+        scale="10 10 10"
+      ></a-gltf-model>
     </a-entity>
 
 
@@ -102,9 +104,9 @@
     <a-entity id="camera-rig" position="0 5 12">
       <a-camera
         id="main-camera"
-        look-controls="enabled: false"
-        wasd-controls="enabled: false"
-        fov="75"
+        look-controls="enabled: true"
+        wasd-controls="enabled: true"
+        position="0 1.6 0"
       ></a-camera>
     </a-entity>
 
