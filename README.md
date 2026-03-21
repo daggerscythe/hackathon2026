@@ -9,6 +9,8 @@
 
 ## CSV integration:
     - Playable characters
+
+# DETAILS
 # Asset Acquisition
     - Map or Stage to be used
     - Character 1 Acquisition (TBD)
@@ -18,9 +20,6 @@
     - Character 5 Acquisition (TBD)
     - Character 6 Acquisition (TBD)
     - Character 7 Acquisition (TBD)
-
-
-# OPTIONAL
 ## Game genre:
     - 4-player 3rd person hero fighter/shooter friend-slop 
     
