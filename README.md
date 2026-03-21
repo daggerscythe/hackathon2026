@@ -29,7 +29,9 @@
     - WebSockets
     
 ## Inutitive user UI & mechanisms:
-
+### Color Scheme
+    - Primary 
+    - Secondary
 
 ## MVP+:
     - additional levels
