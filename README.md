@@ -35,8 +35,8 @@
     
 ## Inutitive user UI & mechanisms:
 ### Color Scheme
-    - Primary 
-    - Secondary
+    - Primary (TBD)
+    - Secondary (TBD)
 
 ## MVP+:
     - additional levels
