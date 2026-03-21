@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="menu.css" />
+  <title>Game Menu</title>
+  
+</head>
+<body>
+  <div class="menu-container">
+    <h1 class="game-title">My Game</h1>
+    <p class="subtitle">Main Menu</p>
+
+    <div class="button-group">
+      <button class="menu-btn" onclick="startGame()">Start</button>
+      <button class="menu-btn secondary" onclick="openSettings()">Settings</button>
+      <button class="menu-btn secondary" onclick="quitGame()">Quit</button>
+    </div>
+
+    <p class="footer-text">Press a button to continue</p>
+  </div>
+
+  <script>
+    function startGame() {
+        window.location.href = "mode-select.html";
+w    }
+
+    function openSettings() {
+      alert("Settings clicked");
+    }
+
+    function quitGame() {
+      alert("Quit clicked");
+    }
+  </script>
+</body>
+</html>
