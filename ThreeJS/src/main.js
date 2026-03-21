@@ -3,7 +3,7 @@ import './style.css';
 import { createViewer } from './core/viewer.js';
 
 // Change this import path to switch which model file is shown.
-import { createModel } from './models/egg3.js';
+import { createModel } from './models/mannequin.js';
 
 function getContainer() {
   const el = document.querySelector('[data-viewer]');
