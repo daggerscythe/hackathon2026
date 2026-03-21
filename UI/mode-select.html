@@ -207,6 +207,13 @@
         alert('Please select a mode first.');
         return;
       }
+      if (selectedMode === "Fate of Goliath") {
+        window.location.href = "pinCode.html";
+      } else if (selectedMode) {
+        window.location.href = "pinCode.html";
+      } else if (selectedMode === "Skirmish") {
+        window.location.href = "pinCode.html";
+      }
       alert('Starting ' + selectedMode + '…');
     }
 
