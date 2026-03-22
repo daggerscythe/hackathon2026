@@ -10,6 +10,7 @@
  * @typedef {{type:'lobby', lobby: LobbyState}} LobbyMsg
  * @typedef {{type:'input', seq:number, buttons:{jump?:boolean}, axis:{x:number, z:number}}} InputMsg
  * @typedef {{type:'match_start', seed:number, spawns: Array<{id:string, x:number, z:number}>}} MatchStartMsg
+ * @typedef {{type:'snapshot', t:number, players: Array<{id:string, x:number, y:number, z:number}>}} SnapshotMsg
  * @typedef {{type:'countdown', endsAt:number}} CountdownMsg
  * @typedef {{type:'game_begin'}} GameBeginMsg
  * @typedef {{type:'error', message:string}} ErrorMsg
@@ -23,7 +24,7 @@
  *   gameStarted?: boolean
  * }} LobbyState
  *
- * @typedef {JoinMsg|ReadyMsg|StartMsg|PickMsg|WelcomeMsg|LobbyMsg|InputMsg|MatchStartMsg|CountdownMsg|GameBeginMsg|ErrorMsg} AnyMsg
+ * @typedef {JoinMsg|ReadyMsg|StartMsg|PickMsg|WelcomeMsg|LobbyMsg|InputMsg|MatchStartMsg|SnapshotMsg|CountdownMsg|GameBeginMsg|ErrorMsg} AnyMsg
  */
 
 export const MsgType = /** @type {const} */ ({
@@ -35,6 +36,7 @@ export const MsgType = /** @type {const} */ ({
   LOBBY: 'lobby',
   INPUT: 'input',
   MATCH_START: 'match_start',
+  SNAPSHOT: 'snapshot',
   COUNTDOWN: 'countdown',
   GAME_BEGIN: 'game_begin',
   ERROR: 'error',

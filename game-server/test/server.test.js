@@ -16,6 +16,22 @@ function waitFor(ws, type) {
   });
 }
 
+function waitForLobby(ws, predicate) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout waiting for lobby state')), 2000);
+    /** @param {import('ws').RawData} data */
+    function onMessage(data) {
+      const msg = JSON.parse(data.toString('utf8'));
+      if (msg.type !== MsgType.LOBBY) return;
+      if (!predicate(msg.lobby)) return;
+      clearTimeout(t);
+      ws.off('message', onMessage);
+      resolve(msg);
+    }
+    ws.on('message', onMessage);
+  });
+}
+
 async function openAndJoin(port, name) {
   const ws = new WebSocket(`ws://localhost:${port}`);
   await new Promise((r) => ws.once('open', r));
@@ -49,10 +65,17 @@ describe('game-server lobby', () => {
     const hostId = a.welcome.lobby?.hostId;
     expect(hostId).toBeTruthy();
 
+    const allReadyLobby = waitForLobby(a.ws, (lobby) => {
+      const active = lobby.players.filter((p) => p.role !== 'spectator');
+      return active.length === 4 && active.every((p) => p.ready);
+    });
+
     a.ws.send(encode({ type: MsgType.READY, ready: true }));
     b.ws.send(encode({ type: MsgType.READY, ready: true }));
     c.ws.send(encode({ type: MsgType.READY, ready: true }));
     d.ws.send(encode({ type: MsgType.READY, ready: true }));
+
+    await allReadyLobby;
 
     const hostWs = a.welcome.playerId === hostId ? a.ws : b.welcome.playerId === hostId ? b.ws : c.welcome.playerId === hostId ? c.ws : d.ws;
     hostWs.send(encode({ type: MsgType.START }));
@@ -80,10 +103,17 @@ describe('game-server lobby', () => {
     const c = await openAndJoin(port, 'C2');
     const d = await openAndJoin(port, 'D2');
 
+    const allReadyLobby = waitForLobby(a.ws, (lobby) => {
+      const active = lobby.players.filter((p) => p.role !== 'spectator');
+      return active.length === 4 && active.every((p) => p.ready);
+    });
+
     a.ws.send(encode({ type: MsgType.READY, ready: true }));
     b.ws.send(encode({ type: MsgType.READY, ready: true }));
     c.ws.send(encode({ type: MsgType.READY, ready: true }));
     d.ws.send(encode({ type: MsgType.READY, ready: true }));
+
+    await allReadyLobby;
 
     const hostId = a.welcome.lobby?.hostId;
     const hostWs = a.welcome.playerId === hostId ? a.ws : b.welcome.playerId === hostId ? b.ws : c.welcome.playerId === hostId ? c.ws : d.ws;

@@ -43,10 +43,82 @@ function getHostUrls(port) {
   return urls;
 }
 
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t += 0x6d2b79f5;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * @param {number} seed
+ * @param {number} count
+ */
+function makeSpawnPoints(seed, count) {
+  const rand = mulberry32(seed);
+  const base = rand() * Math.PI * 2;
+
+  /** @type {Array<{x:number, z:number}>} */
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const angleJitter = (rand() - 0.5) * (Math.PI / 9);
+    const radius = 3.0 + rand() * 1.25;
+    const angle = base + i * ((Math.PI * 2) / count) + angleJitter;
+    points.push({
+      x: Math.cos(angle) * radius,
+      z: Math.sin(angle) * radius,
+    });
+  }
+
+  // Shuffle so spawn ordering isn't always the same for early-joining players.
+  for (let i = points.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const tmp = points[i];
+    points[i] = points[j];
+    points[j] = tmp;
+  }
+
+  return points;
+}
+
 export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
   const wss = new WebSocketServer({ port });
   /** @type {Map<string, Player>} */
   const players = new Map();
+
+  /** @type {Promise<any> | null} */
+  let rapierReady = null;
+  async function getRapier() {
+    if (!rapierReady) {
+      rapierReady = import('@dimforge/rapier3d-compat').then(async (m) => {
+        const RAPIER = m.default ?? m;
+        if (typeof RAPIER.init === 'function') {
+          const origWarn = console.warn;
+          console.warn = (...args) => {
+            const msg = String(args?.[0] ?? '');
+            if (msg.includes('deprecated parameters for the initialization function')) return;
+            origWarn(...args);
+          };
+          try {
+            await RAPIER.init({});
+          } finally {
+            console.warn = origWarn;
+          }
+        }
+        return RAPIER;
+      });
+    }
+    return rapierReady;
+  }
+
+  // Warm up Rapier/WASM so game_begin-to-first-snapshot latency is small.
+  // If it fails, we’ll fall back to "no physics" (client will still render static scene).
+  getRapier().catch(() => {
+    // ignore
+  });
 
   const hostUrls = getHostUrls(port);
 
@@ -58,6 +130,132 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
   let countdownEndsAt = null;
   /** @type {NodeJS.Timeout | null} */
   let countdownTimer = null;
+
+  /** @type {Array<{id:string, x:number, z:number}> | null} */
+  let matchSpawns = null;
+
+  /** @type {null | { RAPIER:any, world:any, bodies: Map<string, any>, input: Map<string, {x:number, z:number}>, tickTimer: NodeJS.Timeout, snapshotTimer: NodeJS.Timeout }} */
+  let sim = null;
+
+  const SIM_HZ = 60;
+  const SNAPSHOT_HZ = 20;
+  const PLAYER_SPEED = 4.2;
+  // With a capsule collider, the body origin should sit above the ground by (radius + halfHeight).
+  // If we lock Y translation and spawn intersecting the ground, Rapier can't resolve the contact and movement appears stuck.
+  const PLAYER_Y = 0.62;
+  const ARENA_HALF = 6.0;
+  const WALL_THICKNESS = 0.25;
+  const WALL_HEIGHT = 2.5;
+
+  function stopSimulation() {
+    if (!sim) return;
+    clearInterval(sim.tickTimer);
+    clearInterval(sim.snapshotTimer);
+    sim = null;
+  }
+
+  /** @param {Array<{id:string,x:number,z:number}>} spawns */
+  async function startSimulation(spawns) {
+    stopSimulation();
+
+    const RAPIER = await getRapier();
+    const world = new RAPIER.World({ x: 0, y: 0, z: 0 });
+    world.timestep = 1 / SIM_HZ;
+
+    // Ground: thin fixed box centered at y=0.
+    {
+      const rb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.05, 0));
+      const col = RAPIER.ColliderDesc.cuboid(40, 0.05, 40).setFriction(1.0);
+      world.createCollider(col, rb);
+    }
+
+    // Walls: four fixed boxes. (Equivalent to an XY-plane wall at +/-Z, and YZ-plane walls at +/-X.)
+    {
+      const t = WALL_THICKNESS;
+      const h = WALL_HEIGHT;
+      const a = ARENA_HALF;
+
+      const wallDefs = [
+        // +Z / -Z walls (XY planes at z=±a)
+        { x: 0, y: h / 2, z: a + t, hx: a + t, hy: h / 2, hz: t },
+        { x: 0, y: h / 2, z: -a - t, hx: a + t, hy: h / 2, hz: t },
+        // +X / -X walls (YZ planes at x=±a)
+        { x: a + t, y: h / 2, z: 0, hx: t, hy: h / 2, hz: a + t },
+        { x: -a - t, y: h / 2, z: 0, hx: t, hy: h / 2, hz: a + t },
+      ];
+
+      for (const w of wallDefs) {
+        const rb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(w.x, w.y, w.z));
+        const col = RAPIER.ColliderDesc.cuboid(w.hx, w.hy, w.hz).setFriction(1.0);
+        world.createCollider(col, rb);
+      }
+    }
+
+    /** @type {Map<string, any>} */
+    const bodies = new Map();
+    /** @type {Map<string, {x:number, z:number}>} */
+    const input = new Map();
+
+    for (const s of spawns) {
+      const x = Number.isFinite(s.x) ? s.x : 0;
+      const z = Number.isFinite(s.z) ? s.z : 0;
+
+      const rbDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(x, PLAYER_Y, z)
+        .setLinearDamping(6.0)
+        .setAngularDamping(10.0);
+      const rb = world.createRigidBody(rbDesc);
+
+      // Keep movement on XZ plane.
+      if (typeof rb.setEnabledRotations === 'function') {
+        rb.setEnabledRotations(false, false, false, true);
+      }
+      if (typeof rb.setEnabledTranslations === 'function') {
+        rb.setEnabledTranslations(true, false, true, true);
+      }
+
+      // Capsule collider for "egg" placeholder (could be sphere if preferred).
+      const radius = 0.35;
+      const halfHeight = 0.25;
+      const colDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius)
+        .setFriction(1.0)
+        .setRestitution(0.0);
+      world.createCollider(colDesc, rb);
+
+      bodies.set(s.id, rb);
+      input.set(s.id, { x: 0, z: 0 });
+    }
+
+    const tickTimer = setInterval(() => {
+      // Apply inputs as target velocities.
+      for (const [id, rb] of bodies.entries()) {
+        const i = input.get(id) ?? { x: 0, z: 0 };
+        let ax = Number.isFinite(i.x) ? i.x : 0;
+        let az = Number.isFinite(i.z) ? i.z : 0;
+        const mag = Math.hypot(ax, az);
+        if (mag > 1e-6 && mag > 1) {
+          ax /= mag;
+          az /= mag;
+        }
+
+        rb.setLinvel({ x: ax * PLAYER_SPEED, y: 0, z: az * PLAYER_SPEED }, true);
+      }
+
+      world.step();
+    }, Math.floor(1000 / SIM_HZ));
+
+    const snapshotTimer = setInterval(() => {
+      /** @type {Array<{id:string,x:number,y:number,z:number}>} */
+      const list = [];
+      for (const [id, rb] of bodies.entries()) {
+        const t = rb.translation();
+        list.push({ id, x: t.x, y: t.y, z: t.z });
+      }
+      broadcast(MsgType.SNAPSHOT, { t: Date.now(), players: list });
+    }, Math.floor(1000 / SNAPSHOT_HZ));
+
+    sim = { RAPIER, world, bodies, input, tickTimer, snapshotTimer };
+  }
 
   function ensureHost() {
     if (hostId && players.has(hostId)) return;
@@ -118,9 +316,21 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
     broadcastLobby();
 
     countdownTimer = setTimeout(() => {
-      gameStarted = true;
-      broadcast(MsgType.GAME_BEGIN, {});
-      broadcastLobby();
+      const spawns = Array.isArray(matchSpawns)
+        ? matchSpawns
+        : confirmedActivePlayers().map((p) => ({ id: p.id, x: 0, z: 0 }));
+
+      startSimulation(spawns)
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('failed to start simulation', err);
+          broadcast(MsgType.ERROR, { message: 'physics init failed (continuing without collisions)' });
+        })
+        .finally(() => {
+          gameStarted = true;
+          broadcast(MsgType.GAME_BEGIN, {});
+          broadcastLobby();
+        });
     }, ms);
   }
 
@@ -253,6 +463,17 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
         maybeStartCountdown();
       }
 
+      if (msg.type === MsgType.INPUT) {
+        if (!gameStarted || !sim) return;
+        if (player.role === Role.SPECTATOR) return;
+        const x = msg.axis?.x;
+        const z = msg.axis?.z;
+        if (typeof x !== 'number' || typeof z !== 'number') return;
+        if (sim.input.has(player.id)) {
+          sim.input.set(player.id, { x, z });
+        }
+      }
+
       if (msg.type === MsgType.START) {
         ensureHost();
         if (!hostId || player.id !== hostId) {
@@ -281,19 +502,21 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
         matchStarted = true;
         gameStarted = false;
         countdownEndsAt = null;
+        matchSpawns = null;
         if (countdownTimer) {
           clearTimeout(countdownTimer);
           countdownTimer = null;
         }
 
-        const spawnPoints = [
-          { x: -2, z: 0 },
-          { x: 2, z: 0 },
-          { x: 0, z: -2 },
-          { x: 0, z: 2 },
-        ];
         const seed = Math.floor(Math.random() * 1_000_000_000);
-        const spawns = active.map((p, i) => ({ id: p.id, x: spawnPoints[i]?.x ?? 0, z: spawnPoints[i]?.z ?? 0 }));
+        const spawnPoints = makeSpawnPoints(seed, active.length);
+        const spawns = active.map((p, i) => ({
+          id: p.id,
+          x: spawnPoints[i]?.x ?? 0,
+          z: spawnPoints[i]?.z ?? 0,
+        }));
+
+        matchSpawns = spawns;
 
         const startMsg = encode({ type: MsgType.MATCH_START, seed, spawns });
         for (const p of players.values()) {
@@ -309,6 +532,19 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
       players.delete(playerId);
       ensureHost();
 
+      if (sim?.bodies?.has(playerId)) {
+        const rb = sim.bodies.get(playerId);
+        if (rb && typeof sim.world?.removeRigidBody === 'function') {
+          try {
+            sim.world.removeRigidBody(rb);
+          } catch {
+            // ignore
+          }
+        }
+        sim.bodies.delete(playerId);
+        sim.input.delete(playerId);
+      }
+
       // If someone leaves before the game begins, reset countdown.
       // (Simple behavior: require 4 confirmed again.)
       if (!gameStarted && countdownEndsAt) {
@@ -317,6 +553,21 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
           clearTimeout(countdownTimer);
           countdownTimer = null;
         }
+      }
+
+      // If everyone leaves, reset the match so new joins start fresh.
+      if (players.size === 0) {
+        hostId = null;
+        matchStarted = false;
+        gameStarted = false;
+        countdownEndsAt = null;
+        matchSpawns = null;
+        if (countdownTimer) {
+          clearTimeout(countdownTimer);
+          countdownTimer = null;
+        }
+
+        stopSimulation();
       }
 
       broadcastLobby();
@@ -330,6 +581,23 @@ export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
   return {
     port,
     wss,
-    close: () => new Promise((resolve) => wss.close(() => resolve())),
+    close: () =>
+      new Promise((resolve) => {
+        if (countdownTimer) {
+          clearTimeout(countdownTimer);
+          countdownTimer = null;
+        }
+
+        stopSimulation();
+
+        for (const client of wss.clients) {
+          try {
+            client.terminate();
+          } catch {
+            // ignore
+          }
+        }
+        wss.close(() => resolve());
+      }),
   };
 }

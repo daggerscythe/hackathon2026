@@ -18,6 +18,7 @@ export function mountApp(root) {
     hostUrls: null,
     connectedHost: null,
     match: null,
+    lastSnapshot: null,
     lastError: null,
     countdownEndsAt: null,
     gameStarted: false,
@@ -25,6 +26,15 @@ export function mountApp(root) {
       mounted: false,
       /** @type {null | (() => void)} */
       dispose: null,
+      /** @type {null | { dispose: () => void, setPlayersState?: (players:any)=>void }} */
+      api: null,
+    },
+    move: {
+      active: false,
+      /** @type {null | (() => void)} */
+      stop: null,
+      seq: 0,
+      keys: new Set(),
     },
     cs: {
       index: 0,
@@ -32,6 +42,85 @@ export function mountApp(root) {
       lastEnterAt: 0,
     },
   };
+
+  // Debug throttle for snapshot logging (used by onMessage handler).
+  let lastSnapshotLogAt = 0;
+
+  function startMovementInput() {
+    if (state.move.active) return;
+    if (!state.connection) return;
+    if (!state.match || !state.gameStarted) return;
+
+    state.move.active = true;
+    state.move.seq = 0;
+    state.move.keys.clear();
+
+    let lastAxisX = 0;
+    let lastAxisZ = 0;
+
+    function isTypingTarget(e) {
+      const tag = String(e.target?.tagName ?? '').toLowerCase();
+      return tag === 'input' || tag === 'textarea';
+    }
+
+    function normalizeKey(key) {
+      return String(key || '').toLowerCase();
+    }
+
+    const onDown = (e) => {
+      if (!state.gameStarted) return;
+      if (isTypingTarget(e)) return;
+      state.move.keys.add(normalizeKey(e.key));
+    };
+
+    const onUp = (e) => {
+      if (isTypingTarget(e)) return;
+      state.move.keys.delete(normalizeKey(e.key));
+    };
+
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+
+    const interval = window.setInterval(() => {
+      if (!state.move.active) return;
+      if (!state.connection) return;
+      if (!state.gameStarted) return;
+
+      const has = (k) => state.move.keys.has(k);
+      const right = has('d') || has('arrowright') ? 1 : 0;
+      const left = has('a') || has('arrowleft') ? 1 : 0;
+      const down = has('s') || has('arrowdown') ? 1 : 0;
+      const up = has('w') || has('arrowup') ? 1 : 0;
+
+      const axisX = right - left;
+      const axisZ = down - up;
+
+      // Debug: verify local input is being captured.
+      if (axisX !== lastAxisX || axisZ !== lastAxisZ) {
+        // eslint-disable-next-line no-console
+        console.debug('input axis', { x: axisX, z: axisZ });
+      }
+
+      lastAxisX = axisX;
+      lastAxisZ = axisZ;
+
+      state.connection.send({
+        type: MsgType.INPUT,
+        seq: state.move.seq++,
+        buttons: {},
+        axis: { x: axisX, z: axisZ },
+      });
+    }, 33);
+
+    state.move.stop = () => {
+      state.move.active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      state.move.keys.clear();
+      state.move.stop = null;
+    };
+  }
 
   const HERO = [
     { id: 'hero:tank', label: 'Tank', team: 'hero' },
@@ -89,9 +178,22 @@ export function mountApp(root) {
       const container = el('div', 'fixed inset-0');
       root.appendChild(container);
 
-      const view = mountGameView(container, { modelUrl: '/models/fryingpan.glb' });
+      const view = mountGameView(container, {
+        modelUrl: '/models/floor-base.glb',
+        players: {
+          modelUrl: '/models/egg.glb',
+          spawns: Array.isArray(state.match?.spawns) ? state.match.spawns : [],
+        },
+      });
       state.gameView.mounted = true;
+      state.gameView.api = view;
       state.gameView.dispose = () => view.dispose();
+
+      if (state.lastSnapshot) {
+        state.gameView.api?.setPlayersState?.(state.lastSnapshot);
+      }
+
+      startMovementInput();
       return;
     }
 
@@ -187,9 +289,12 @@ export function mountApp(root) {
     disconnect.textContent = 'Disconnect';
     disconnect.disabled = !state.connection;
     disconnect.addEventListener('click', () => {
+      state.move.stop?.();
+
       state.gameView.dispose?.();
       state.gameView.mounted = false;
       state.gameView.dispose = null;
+      state.gameView.api = null;
 
       state.connection?.close();
       state.connection = null;
@@ -200,6 +305,7 @@ export function mountApp(root) {
       state.hostUrls = null;
       state.connectedHost = null;
       state.match = null;
+      state.lastSnapshot = null;
       state.lastError = null;
       state.countdownEndsAt = null;
       state.gameStarted = false;
@@ -273,6 +379,20 @@ export function mountApp(root) {
           if (msg.type === MsgType.GAME_BEGIN) {
             state.gameStarted = true;
             render();
+          }
+
+          if (msg.type === MsgType.SNAPSHOT) {
+            const players = Array.isArray(msg.players) ? msg.players : [];
+            state.lastSnapshot = players;
+            if (!state.gameStarted) return;
+            // Debug: verify authoritative positions are arriving.
+            const now = Date.now();
+            if (now - lastSnapshotLogAt > 500) {
+              // eslint-disable-next-line no-console
+              console.debug('snapshot', { n: players.length });
+              lastSnapshotLogAt = now;
+            }
+            state.gameView.api?.setPlayersState?.(players);
           }
 
           if (msg.type === MsgType.ERROR) {
