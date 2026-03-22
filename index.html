@@ -5,132 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hackathon Game</title>
 
-  <!-- A-Frame Physics plugin -->
-  <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-physics-system@v4.0.1/dist/aframe-physics-system.min.js"></script>
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- Physics plugin -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.4/dist/aframe-physics-system.min.js"></script>
 
-  <link rel="stylesheet" href="UI/ui.css" />
   <script src="game/game.js"></script>
+  <script src="game/physics.js"></script>
   <script src="UI/menu.js"></script>
 </head>
 <body>
 
-  <!-- HUD / UI -->
-  <div id="ui-root">
-    <!-- Character select screen, health bars, exp display, etc. go here -->
-    <div id="screen-character-select" class="screen hidden"></div>
-    <div id="screen-battle-hud"       class="screen hidden"></div>
-    <div id="screen-game-over"        class="screen hidden"></div>
-  </div>
-
-
-  <!-- =============================================
-       A-Frame Scene
-  ============================================= -->
-  <a-scene
-    id="main-scene"
-    renderer="antialias: true"
-    shadow="type: pcfsoft"
-    physics="gravity: -9.8; debug: true"
-  >
-  
+    <!-- A-Frame Scene -->
+    <a-scene
+      id="main-scene"
+      renderer="antialias: true"
+      shadow="type: pcfsoft"
+      physics="gravity: -9.8; debug: true"
+      game-manager
+    >
 
     <!-- Assets -->
     <a-assets>
-      <a-asset-item id="arena" src="assets/models/low_poly_landscape.glb"></a-asset-item>
       <img id="sky" src="assets/textures/sky.jpg"/>
     </a-assets>
 
     <a-sky src="#sky"></a-sky>
+
     <!-- Stage / Map -->
     <a-entity id="stage">
-      <a-gltf-model
-        src="#arena"
-        position="-200 0 -100"
-        rotation="0 40 0"
-        scale="5 5 5"
-      ></a-gltf-model>
+      <a-box
+        id="floor"
+        position="0 -0.05 0"
+        width="40" height="0.1" depth="40"
+        color="#4a7c3f"
+        static-body="shape: box"
+      ></a-box>
+
+      <a-box
+        id="platform"
+        position="3 0.5 -3"
+        width="3" height="1" depth="3"
+        color="#8B4513"
+        static-body="shape: box"
+      ></a-box>
     </a-entity>
 
 
     <!-- Lighting -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.4"></a-entity>
-    <a-entity light="type: directional; color: #ffffff; intensity: 0.8"
-              position="5 10 5" shadow="cast: true"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 0.8" position="5 10 5" shadow="cast: true"></a-entity>
 
 
     <!--  Players  -->
 
-    <!-- Villain (1) -->
+    <!-- Villain -->
     <a-entity
       id="player-villain"
       class="player"
       data-role="villain"
-      position="-6 0.5 0"
+      position="0 2 0"
+      dynamic-body="mass: 5; linearDamping: 0.99; angularDamping: 1.0"
+      player-physics
     >
-      <a-box color="#c0392b" depth="1" height="2" width="1"></a-box>
-    </a-entity>
-
-    <!-- Hero 1 -->
-    <a-entity
-      id="player-hero-1"
-      class="player"
-      data-role="hero"
-      position="4 0.5 -2"
-    >
-      <a-box color="#2980b9" depth="1" height="2" width="1"></a-box>
-    </a-entity>
-
-    <!-- Hero 2 -->
-    <a-entity
-      id="player-hero-2"
-      class="player"
-      data-role="hero"
-      position="6 0.5 0"
-    >
-      <a-box color="#27ae60" depth="1" height="2" width="1"></a-box>
-    </a-entity>
-
-    <!-- Hero 3 -->
-    <a-entity
-      id="player-hero-3"
-      class="player"
-      data-role="hero"
-      position="4 0.5 2"
-    >
-      <a-box color="#8e44ad" depth="1" height="2" width="1"></a-box>
-    </a-entity>
-
-
-    <!-- -----------------------------------------
-         Camera rig — 3rd person, orbits behind local player
-    ----------------------------------------- -->
-    <a-entity id="camera-rig" position="0 5 12">
+      <a-box color="#c0392b" width="0.8" height="1.8" depth="0.8" position="0 0.9 0"></a-box>
       <a-camera
         id="main-camera"
-        look-controls="enabled: true"
-        wasd-controls="enabled: true"
-        position="0 1.6 0"
+        position="0 1.0 0"
+        look-controls="pointerLockEnabled: true"
+        wasd-controls="enabled: false"
       ></a-camera>
     </a-entity>
-
+    
   </a-scene>
-
-
-  <!-- Scripts - in this specific order -->
-
-  <!-- CSV loader — parses characters.csv, exposes window.CharacterData -->
-  <script src="game/read_csv.js"></script>
-
-  <!-- Core game logic -->
-  <script src="game/game.js"></script>
-
-  <!-- UI controller — listens to game events, updates DOM -->
-  <script src="game/ui.js"></script>
-
-  <!-- WebSocket client -->
-  <!-- <script src="game/network.js"></script> -->
 
 </body>
 </html>

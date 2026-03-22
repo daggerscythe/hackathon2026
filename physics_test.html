@@ -82,7 +82,7 @@
         const worldQuat = new THREE.Quaternion();
         camera.object3D.getWorldQuaternion(worldQuat);
         const euler = new THREE.Euler();
-        euler.setFromQuaternion(camera.object3D.quaternion, 'YXZ');
+        euler.setFromQuaternion(worldQuat, 'YXZ');
         const angle = euler.y;
 
         const moveX   = (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0);
