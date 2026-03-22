@@ -352,9 +352,10 @@ let matchState = null; // current match's metadata
  */
 function initMatch(villainId, heroIds) {
     if (getState() !== STATES.CHARACTER_SELECT) {
-        console.warn('initMatch called outside of CHARACTER_SELECT state');
+        console.warn('[Game] initMatch: already started, ignoring');
         return;
     }
+    heroIds = heroIds || [];
 
     matchState = {
         villainId,
@@ -379,9 +380,12 @@ function onCharacterDefeatedMatchCheck(event) {
 
 function checkWin() {
     if (!matchState || getState() !== STATES.BATTLE) return;
-
     const villainDead = !isAlive(matchState.villainId);
-    const HeroesDead = matchState.heroIds.every(id => !isAlive(id));
+    const allHeroIds  = new Set([
+        ...matchState.heroIds,
+        ...[...characters.values()].filter(c => c.role === 'hero').map(c => c.id),
+    ]);
+    const HeroesDead = allHeroIds.size > 0 && [...allHeroIds].every(id => !isAlive(id));
 
     if (villainDead) {
         endMatch('hero');

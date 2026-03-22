@@ -176,13 +176,14 @@ AFRAME.registerComponent('melee-hitbox', {
       const dist      = myPos.distanceTo(targetPos);
 
       if (dist <= MELEE_RANGE) {
+<<<<<<< HEAD
+=======
+        console.log(`Melee hit: ${attacker.name} → ${target.name}`);
+>>>>>>> 6d7de8c (maybe something)
         const damage = calcDamage(attacker, target, 'strength');
-        applyHit(this.data.characterId, target.id, 'strength');
-
-        // tell other clients about this hit
-        if (typeof sendAttackEvent === 'function') {
-            sendAttackEvent('melee', target.id, damage);
-        }
+        applyHit(this.data.characterId, target.id, 'strength'); // apply once
+        // Tell Colyseus server about this hit (server re-validates + broadcasts)
+        if (typeof sendMeleeHit === 'function') sendMeleeHit(target.id, damage);
       }
     });
   },
@@ -230,10 +231,28 @@ AFRAME.registerComponent('attack-input', {
     };
     
     // prevent right click context menu
-    this.onContextMenu = (e) => e.preventDefault();
+        // H = heal nearest ally, relay via Colyseus
+    this.onHealKey = (e) => {
+      if (e.code !== 'KeyH') return;
+      if (typeof getState === 'function' && getState() !== STATES.BATTLE) return;
+      const charId = this.data.characterId;
+      const char   = characters.get(charId);
+      if (!char || !char.isAlive || char.role !== 'hero') return;
+      let nearestId = charId, nearestDist = Infinity;
+      characters.forEach(c => {
+        if (c.role !== 'hero' || !c.isAlive) return;
+        const el = document.getElementById(c.entityId); if (!el) return;
+        const d = this.el.object3D.position.distanceTo(el.object3D.position);
+        if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
+      });
+      performHeal(charId, nearestId);
+      if (typeof sendHealEvent === 'function') sendHealEvent(charId, nearestId);
+    };
 
+    this.onContextMenu = (e) => e.preventDefault();
     window.addEventListener('mousedown',   this.onMouseDown);
     window.addEventListener('contextmenu', this.onContextMenu);
+    window.addEventListener('keydown',     this.onHealKey);
   },
 
   // ---- MELEE ----
@@ -253,16 +272,14 @@ AFRAME.registerComponent('attack-input', {
   doMagic() {
     const char = characters.get(this.data.characterId);
     if (!char || !char.isAlive) return;
-
-    // get camera facing direction
     const cam       = document.getElementById('main-camera');
     const worldQuat = new THREE.Quaternion();
     cam.object3D.getWorldQuaternion(worldQuat);
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat).normalize();
-
-    performMagic(this.data.characterId, { x: dir.x, y: dir.y, z: dir.z });
-
-    // show fireball sprite briefly at spawn point
+    const dir       = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat).normalize();
+    const direction = { x: dir.x, y: dir.y, z: dir.z };
+    performMagic(this.data.characterId, direction);
+    // Tell Colyseus to broadcast projectile spawn to all clients
+    if (typeof sendMagicEvent === 'function') sendMagicEvent(direction);
     this.showWeapon('fireball', '0.3 0.3 0.3', 400);
   },
 
