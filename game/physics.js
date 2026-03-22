@@ -179,16 +179,12 @@ AFRAME.registerComponent('melee-hitbox', {
         console.log(`Melee hit: ${attacker.name} → ${target.name}`);
         applyHit(this.data.characterId, target.id, 'strength');
 
-        // flash target red
-        const mesh = targetEl.getObject3D('mesh');
-        if (mesh) {
-          mesh.traverse(child => {
-            if (child.isMesh) {
-              const origColor = child.material.color.clone();
-              child.material.color.set('#e74c3c');
-              setTimeout(() => child.material.color.copy(origColor), 200);
-            }
-          });
+        const damage = calcDamage(attacker, target, 'strength');
+        applyHit(this.data.characterId, target.id, 'strength');
+
+        // tell other clients about this hit
+        if (typeof sendAttackEvent === 'function') {
+            sendAttackEvent('melee', target.id, damage);
         }
       }
     });
