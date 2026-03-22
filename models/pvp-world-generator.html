@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PVP World Asset — Slaying Goliath</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap');
+
+    :root {
+      --gold: #c9a84c;
+      --gold-light: #e8c96a;
+      --dark: #0a0c0f;
+      --white-dim: rgba(240,236,228,0.7);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #030507;
+      color: var(--white-dim);
+      font-family: 'Cinzel', serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 14px 28px;
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+      background: rgba(10,12,15,0.95);
+      z-index: 10;
+    }
+
+    .title-block h1 {
+      font-family: 'Cinzel Decorative', serif;
+      color: var(--gold-light);
+      font-size: 1rem;
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px rgba(201,168,76,0.5);
+    }
+    .title-block p {
+      font-size: 0.6rem;
+      letter-spacing: 3px;
+      color: rgba(240,236,228,0.35);
+      margin-top: 2px;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border: 1px solid var(--gold);
+      background: transparent;
+      color: var(--gold-light);
+      padding: 8px 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(201,168,76,0.12); letter-spacing: 3px; }
+    .btn.primary { background: rgba(201,168,76,0.15); }
+
+    #canvas-wrap {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    #three-canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+
+    #info-panel {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 24px;
+      background: rgba(10,12,15,0.82);
+      border: 1px solid rgba(201,168,76,0.2);
+      padding: 10px 24px;
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: rgba(240,236,228,0.45);
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    #status {
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+      color: rgba(240,236,228,0.45);
+      text-transform: uppercase;
+    }
+
+    #status.ok { color: #6ecf7a; }
+    #status.working { color: var(--gold); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>PVP Coliseum World</h1>
+    <p>Slaying Goliath &nbsp;·&nbsp; OleMiss CS &nbsp;·&nbsp; A-Frame Asset</p>
+  </div>
+  <div class="controls">
+    <span id="status">Initialising…</span>
+    <button class="btn primary" onclick="exportGLB()">⬇ Export .glb</button>
+  </div>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="three-canvas"></canvas>
+  <div id="info-panel">
+    <span>Left-drag: Orbit</span>
+    <span>Right-drag: Pan</span>
+    <span>Scroll: Zoom</span>
+    <span>Import glb into A-Frame via &lt;a-asset-item&gt;</span>
+  </div>
+</div>
+
+<!-- Three.js r128 + GLTFExporter -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── GLTFExporter (r128 compatible, inlined) ──────────────────────────────────
+// Minimal GLTFExporter that handles BufferGeometry + MeshStandardMaterial
+// Produces a valid binary GLB compatible with A-Frame / model-viewer.
+(function(){
+"use strict";
+THREE.GLTFExporter=function(){};
+THREE.GLTFExporter.prototype={constructor:THREE.GLTFExporter,parse:function(input,onDone,options){
+  options=Object.assign({binary:true,embedImages:false},options||{});
+  var scene=input instanceof THREE.Scene?input:new THREE.Scene();
+  if(!(input instanceof THREE.Scene))scene.add(input.clone?input.clone():input);
+
+  var json={asset:{version:"2.0",generator:"THREE.GLTFExporter-mini"},scene:0,scenes:[{nodes:[]}],nodes:[],meshes:[],accessors:[],bufferViews:[],materials:[],buffers:[]};
+  var binChunks=[];
+  var byteOffset=0;
+
+  function pad4(n){return Math.ceil(n/4)*4;}
+
+  function addBufferView(data,target){
+    var buf=data instanceof Float32Array||data instanceof Uint16Array||data instanceof Uint32Array?data.buffer:data;
+    var arr=new Uint8Array(buf instanceof ArrayBuffer?buf:data.buffer);
+    var len=arr.byteLength;
+    var padded=pad4(len);
+    var chunk=new Uint8Array(padded);
+    chunk.set(arr);
+    binChunks.push(chunk);
+    var bv={buffer:0,byteOffset:byteOffset,byteLength:len};
+    if(target)bv.target=target;
+    json.bufferViews.push(bv);
+    byteOffset+=padded;
+    return json.bufferViews.length-1;
+  }
+
+  function addAccessor(bvIdx,componentType,count,type,min,max){
+    var acc={bufferView:bvIdx,componentType:componentType,count:count,type:type};
+    if(min)acc.min=Array.from(min);
+    if(max)acc.max=Array.from(max);
+    json.accessors.push(acc);
+    return json.accessors.length-1;
+  }
+
+  var matCache=new Map();
+  function addMaterial(mat){
+    if(!mat)return 0;
+    if(matCache.has(mat.uuid))return matCache.get(mat.uuid);
+    var c=mat.color||new THREE.Color(0.8,0.8,0.8);
+    var gltfMat={pbrMetallicRoughness:{
+      baseColorFactor:[c.r,c.g,c.b,mat.opacity!==undefined?mat.opacity:1],
+      metallicFactor:mat.metalness!==undefined?mat.metalness:0,
+      roughnessFactor:mat.roughness!==undefined?mat.roughness:0.8
+    }};
+    if(mat.side===THREE.DoubleSide)gltfMat.doubleSided=true;
+    json.materials.push(gltfMat);
+    var idx=json.materials.length-1;
+    matCache.set(mat.uuid,idx);
+    return idx;
+  }
+
+  function processMesh(mesh,parentNode){
+    var geo=mesh.geometry;
+    if(!geo||!geo.attributes.position)return;
+    geo=geo.toNonIndexed?geo.clone():geo;
+    if(geo.index)geo=geo.toNonIndexed();
+
+    var pos=geo.attributes.position;
+    var nor=geo.attributes.normal;
+    if(!nor){geo.computeVertexNormals();nor=geo.attributes.normal;}
+
+    var posArr=new Float32Array(pos.array);
+    var norArr=new Float32Array(nor.array);
+    var count=pos.count;
+
+    // compute bounds for accessor
+    var pMin=[Infinity,Infinity,Infinity],pMax=[-Infinity,-Infinity,-Infinity];
+    for(var i=0;i<count;i++){
+      var x=posArr[i*3],y=posArr[i*3+1],z=posArr[i*3+2];
+      if(x<pMin[0])pMin[0]=x;if(y<pMin[1])pMin[1]=y;if(z<pMin[2])pMin[2]=z;
+      if(x>pMax[0])pMax[0]=x;if(y>pMax[1])pMax[1]=y;if(z>pMax[2])pMax[2]=z;
+    }
+
+    var pvIdx=addBufferView(posArr,34962);
+    var nvIdx=addBufferView(norArr,34962);
+    var paIdx=addAccessor(pvIdx,5126,count,"VEC3",pMin,pMax);
+    var naIdx=addAccessor(nvIdx,5126,count,"VEC3");
+
+    var matArr=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+    var matIdx=addMaterial(matArr[0]);
+
+    json.meshes.push({primitives:[{attributes:{POSITION:paIdx,NORMAL:naIdx},material:matIdx,mode:4}]});
+    var meshIdx=json.meshes.length-1;
+
+    var node={name:mesh.name||"mesh_"+meshIdx,mesh:meshIdx};
+    // apply world transform
+    var m=mesh.matrixWorld;
+    node.matrix=[m.elements[0],m.elements[1],m.elements[2],m.elements[3],
+                  m.elements[4],m.elements[5],m.elements[6],m.elements[7],
+                  m.elements[8],m.elements[9],m.elements[10],m.elements[11],
+                  m.elements[12],m.elements[13],m.elements[14],m.elements[15]];
+    json.nodes.push(node);
+    json.scenes[0].nodes.push(json.nodes.length-1);
+  }
+
+  // update world matrices
+  scene.updateMatrixWorld(true);
+
+  scene.traverse(function(obj){
+    if(obj.isMesh&&obj.geometry&&obj.geometry.attributes&&obj.geometry.attributes.position){
+      processMesh(obj);
+    }
+  });
+
+  // combine bin chunks
+  var totalBin=byteOffset;
+  var binBuffer=new Uint8Array(totalBin);
+  var off=0;
+  for(var c of binChunks){binBuffer.set(c,off);off+=c.byteLength;}
+
+  if(totalBin>0)json.buffers=[{byteLength:totalBin}];
+
+  if(!options.binary){onDone(json);return;}
+
+  // Build GLB
+  var jsonStr=JSON.stringify(json);
+  while(jsonStr.length%4!==0)jsonStr+=' ';
+  var jsonBytes=new TextEncoder().encode(jsonStr);
+  var headerLen=12;
+  var jsonChunkLen=8+jsonBytes.byteLength;
+  var binChunkLen=totalBin>0?8+binBuffer.byteLength:0;
+  var totalLen=headerLen+jsonChunkLen+binChunkLen;
+  var glb=new ArrayBuffer(totalLen);
+  var dv=new DataView(glb);
+  // Header
+  dv.setUint32(0,0x46546C67,true); // magic
+  dv.setUint32(4,2,true);           // version
+  dv.setUint32(8,totalLen,true);
+  // JSON chunk
+  dv.setUint32(12,jsonBytes.byteLength,true);
+  dv.setUint32(16,0x4E4F534A,true); // JSON
+  new Uint8Array(glb,20).set(jsonBytes);
+  // BIN chunk
+  if(totalBin>0){
+    var bOff=20+jsonBytes.byteLength;
+    dv.setUint32(bOff,binBuffer.byteLength,true);
+    dv.setUint32(bOff+4,0x004E4942,true); // BIN
+    new Uint8Array(glb,bOff+8).set(binBuffer);
+  }
+  onDone(glb);
+}};
+})();
+</script>
+
+<script>
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('three-canvas');
+const wrap   = document.getElementById('canvas-wrap');
+const status = document.getElementById('status');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x06080b);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.Fog(0x06080b, 28, 80);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+camera.position.set(0, 14, 26);
+camera.lookAt(0, 0, 0);
+
+// ── Orbit Controls (minimal inline) ──────────────────────────────────────────
+let drag=null, camTheta=0.42, camPhi=1.1, camR=28;
+let panX=0, panY=0;
+
+canvas.addEventListener('mousedown', e=>{
+  drag={btn:e.button,sx:e.clientX,sy:e.clientY,t0:camTheta,p0:camPhi,px0:panX,py0:panY};
+});
+window.addEventListener('mouseup', ()=>drag=null);
+window.addEventListener('mousemove', e=>{
+  if(!drag)return;
+  if(drag.btn===0){
+    camTheta=drag.t0-(e.clientX-drag.sx)*0.006;
+    camPhi  =Math.max(0.1,Math.min(Math.PI-0.1,drag.p0+(e.clientY-drag.sy)*0.005));
+  } else {
+    panX=drag.px0+(e.clientX-drag.sx)*0.03;
+    panY=drag.py0-(e.clientY-drag.sy)*0.03;
+  }
+});
+canvas.addEventListener('wheel', e=>{camR=Math.max(5,Math.min(80,camR+e.deltaY*0.04));});
+
+function updateCamera(){
+  camera.position.set(
+    panX+camR*Math.sin(camPhi)*Math.sin(camTheta),
+    panY+camR*Math.cos(camPhi),
+    camR*Math.sin(camPhi)*Math.cos(camTheta)
+  );
+  camera.lookAt(panX,panY,0);
+}
+
+// ── Materials ─────────────────────────────────────────────────────────────────
+const M = {
+  stone    : new THREE.MeshStandardMaterial({color:0x3a3530,roughness:0.92,metalness:0.05}),
+  stoneDark: new THREE.MeshStandardMaterial({color:0x252220,roughness:0.95,metalness:0.0}),
+  goldTrim : new THREE.MeshStandardMaterial({color:0xc9a84c,roughness:0.3, metalness:0.85}),
+  dirt     : new THREE.MeshStandardMaterial({color:0x5c3d1e,roughness:1.0, metalness:0.0}),
+  sand     : new THREE.MeshStandardMaterial({color:0x9b7a4a,roughness:0.95,metalness:0.0}),
+  lava     : new THREE.MeshStandardMaterial({color:0xff4400,roughness:0.5, metalness:0.1,emissive:new THREE.Color(0xff2200),emissiveIntensity:0.8}),
+  magma    : new THREE.MeshStandardMaterial({color:0xff6600,roughness:0.3, metalness:0.0,emissive:new THREE.Color(0xff3300),emissiveIntensity:1.2}),
+  obsidian : new THREE.MeshStandardMaterial({color:0x12090f,roughness:0.15,metalness:0.7}),
+  wood     : new THREE.MeshStandardMaterial({color:0x4a2e10,roughness:0.9, metalness:0.0}),
+  flagRed  : new THREE.MeshStandardMaterial({color:0xcc2222,roughness:0.8, metalness:0.0,side:THREE.DoubleSide}),
+  flagBlue : new THREE.MeshStandardMaterial({color:0x2244cc,roughness:0.8, metalness:0.0,side:THREE.DoubleSide}),
+};
+
+// Export group — everything we want exported
+const worldGroup = new THREE.Group();
+worldGroup.name  = 'PVP_Coliseum_World';
+scene.add(worldGroup);
+
+// ── ARENA FLOOR ───────────────────────────────────────────────────────────────
+// Main arena — circular dirt/sand floor
+const arenaGeo  = new THREE.CylinderGeometry(14, 14, 0.5, 48);
+const arena     = new THREE.Mesh(arenaGeo, M.sand);
+arena.name      = 'arena_floor';
+arena.receiveShadow = true;
+worldGroup.add(arena);
+
+// Cracked inner circle
+const innerGeo  = new THREE.CylinderGeometry(8, 8, 0.52, 32);
+const inner     = new THREE.Mesh(innerGeo, M.dirt);
+inner.name      = 'arena_inner';
+inner.receiveShadow = true;
+worldGroup.add(inner);
+
+// Center marker disc
+const centerGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.55, 16);
+const center    = new THREE.Mesh(centerGeo, M.goldTrim);
+center.name     = 'center_marker';
+worldGroup.add(center);
+
+// ── OUTER WALL (coliseum ring) ────────────────────────────────────────────────
+const WALL_SEGS = 24;
+for(let i=0;i<WALL_SEGS;i++){
+  const angle = (i/WALL_SEGS)*Math.PI*2;
+  const nx    = Math.sin(angle)*14.9;
+  const nz    = Math.cos(angle)*14.9;
+  const pillarGeo = new THREE.BoxGeometry(1.2, 4.5, 1.2);
+  const pillar    = new THREE.Mesh(pillarGeo, M.stone);
+  pillar.position.set(nx, 2.25, nz);
+  pillar.rotation.y = angle;
+  pillar.castShadow = pillar.receiveShadow = true;
+  pillar.name = 'wall_pillar_'+i;
+  worldGroup.add(pillar);
+
+  // Arch / lintel between pillars
+  if(i%3!==0){ // leave gates open every 3rd
+    const angle2=(( i+1)/WALL_SEGS)*Math.PI*2;
+    const mx=(Math.sin(angle)+Math.sin(angle2))*0.5*15.2;
+    const mz=(Math.cos(angle)+Math.cos(angle2))*0.5*15.2;
+    const wallSeg = new THREE.Mesh(new THREE.BoxGeometry(1.8,1.5,0.9), M.stoneDark);
+    wallSeg.position.set(mx, 4.0, mz);
+    wallSeg.rotation.y = angle+Math.PI/(WALL_SEGS);
+    wallSeg.castShadow=true;
+    wallSeg.name='wall_lintel_'+i;
+    worldGroup.add(wallSeg);
+  }
+}
+
+// Gold trim ring at top of wall
+const torusGeo  = new THREE.TorusGeometry(14.9, 0.15, 8, 48);
+const torus     = new THREE.Mesh(torusGeo, M.goldTrim);
+torus.rotation.x = Math.PI/2;
+torus.position.y  = 4.5;
+torus.name        = 'wall_gold_rim';
+worldGroup.add(torus);
+
+// ── LAVA MOAT (ring just outside wall) ───────────────────────────────────────
+const moatOuter = 18;
+const moatInner = 15.3;
+const moatShape = new THREE.Shape();
+moatShape.absarc(0,0,moatOuter,0,Math.PI*2,false);
+const hole = new THREE.Path();
+hole.absarc(0,0,moatInner,0,Math.PI*2,true);
+moatShape.holes.push(hole);
+const extSettings = {depth:0.4,bevelEnabled:false};
+const moatGeo = new THREE.ExtrudeGeometry(moatShape, extSettings);
+const moat    = new THREE.Mesh(moatGeo, M.lava);
+moat.rotation.x = -Math.PI/2;
+moat.position.y = -0.1;
+moat.name = 'lava_moat';
+worldGroup.add(moat);
+
+// Lava bubble clusters
+for(let i=0;i<14;i++){
+  const a = Math.random()*Math.PI*2;
+  const r = moatInner+Math.random()*(moatOuter-moatInner);
+  const bGeo = new THREE.SphereGeometry(0.15+Math.random()*0.25, 7, 5);
+  const b    = new THREE.Mesh(bGeo, M.magma);
+  b.position.set(Math.sin(a)*r, 0.35+Math.random()*0.25, Math.cos(a)*r);
+  b.name='lava_bubble_'+i;
+  worldGroup.add(b);
+}
+
+// ── COVER OBJECTS (PVP obstacles) ─────────────────────────────────────────────
+// Broken pillars scattered around inner arena
+const pillarPositions = [
+  [5,0,3], [-5,0,3], [4,0,-5], [-4,0,-5],
+  [0,0,7], [0,0,-7], [7,0,0], [-7,0,0],
+];
+pillarPositions.forEach((pos,i)=>{
+  const h = 1.5+Math.random();
+  const pGeo = new THREE.CylinderGeometry(0.45,0.5,h,8);
+  const p    = new THREE.Mesh(pGeo, M.stone);
+  p.position.set(pos[0], h/2, pos[2]);
+  p.castShadow=p.receiveShadow=true;
+  p.name='cover_pillar_'+i;
+  worldGroup.add(p);
+  // Gold cap
+  const capGeo = new THREE.CylinderGeometry(0.55,0.55,0.12,8);
+  const cap    = new THREE.Mesh(capGeo, M.goldTrim);
+  cap.position.set(pos[0], h+0.06, pos[2]);
+  cap.name='cover_cap_'+i;
+  worldGroup.add(cap);
+});
+
+// Low stone barriers (crenellations)
+const barrierDefs=[
+  {x:3,z:0,ry:0},{x:-3,z:0,ry:0},
+  {x:0,z:3,ry:Math.PI/2},{x:0,z:-3,ry:Math.PI/2},
+  {x:5.5,z:5.5,ry:Math.PI/4},{x:-5.5,z:5.5,ry:Math.PI/4},
+  {x:5.5,z:-5.5,ry:-Math.PI/4},{x:-5.5,z:-5.5,ry:-Math.PI/4},
+];
+barrierDefs.forEach((b,i)=>{
+  const bGeo = new THREE.BoxGeometry(3.2, 1.0, 0.55);
+  const bar  = new THREE.Mesh(bGeo, M.stoneDark);
+  bar.position.set(b.x, 0.5, b.z);
+  bar.rotation.y = b.ry;
+  bar.castShadow=bar.receiveShadow=true;
+  bar.name='barrier_'+i;
+  worldGroup.add(bar);
+});
+
+// ── SPAWN PLATFORMS (Red vs Blue) ─────────────────────────────────────────────
+function makeSpawn(x, z, mat, flagMat, name){
+  // Raised octagonal platform
+  const pGeo = new THREE.CylinderGeometry(2.2, 2.5, 0.6, 8);
+  const plat = new THREE.Mesh(pGeo, M.obsidian);
+  plat.position.set(x, 0.3, z);
+  plat.castShadow=plat.receiveShadow=true;
+  plat.name=name+'_platform';
+  worldGroup.add(plat);
+  // Gold trim ring
+  const tGeo = new THREE.TorusGeometry(2.2, 0.08, 6, 8);
+  const t    = new THREE.Mesh(tGeo, mat);
+  t.rotation.x=Math.PI/2; t.position.set(x, 0.62, z);
+  t.name=name+'_trim';
+  worldGroup.add(t);
+  // Flagpole
+  const poleGeo = new THREE.CylinderGeometry(0.05, 0.07, 3.5, 6);
+  const pole    = new THREE.Mesh(poleGeo, M.goldTrim);
+  pole.position.set(x, 2.35, z);
+  pole.name=name+'_pole';
+  worldGroup.add(pole);
+  // Flag
+  const flagGeo = new THREE.PlaneGeometry(1.1, 0.65, 4, 3);
+  const flag    = new THREE.Mesh(flagGeo, flagMat);
+  flag.position.set(x+0.55, 3.6, z);
+  flag.name=name+'_flag';
+  worldGroup.add(flag);
+}
+
+makeSpawn( 0, -11, M.goldTrim, M.flagRed,  'spawn_red');
+makeSpawn( 0,  11, M.goldTrim, M.flagBlue, 'spawn_blue');
+
+// ── SPECTATOR STANDS (tiered seating arcs) ───────────────────────────────────
+for(let tier=0; tier<3; tier++){
+  const r = 16.5+tier*1.3;
+  const y = 0.6+tier*0.9;
+  const h = 0.7;
+  const seatsGeo = new THREE.CylinderGeometry(r+0.4, r, h, 48, 1, false, 0, Math.PI*2);
+  const seats    = new THREE.Mesh(seatsGeo, tier===2?M.stoneDark:M.stone);
+  seats.position.y = y;
+  seats.receiveShadow=true;
+  seats.name='stand_tier_'+tier;
+  worldGroup.add(seats);
+}
+
+// ── TORCHES (atmospheric light sources) ───────────────────────────────────────
+const torchPositions=[];
+for(let i=0;i<8;i++){
+  const a=(i/8)*Math.PI*2;
+  torchPositions.push([Math.sin(a)*13.8, Math.cos(a)*13.8]);
+}
+
+torchPositions.forEach(([tx,tz],i)=>{
+  // Bracket arm
+  const bGeo = new THREE.BoxGeometry(0.12, 1.2, 0.12);
+  const b    = new THREE.Mesh(bGeo, M.wood);
+  b.position.set(tx, 3.5, tz);
+  b.name='torch_bracket_'+i;
+  worldGroup.add(b);
+  // Bowl
+  const bowlGeo = new THREE.CylinderGeometry(0.28, 0.15, 0.35, 8);
+  const bowl    = new THREE.Mesh(bowlGeo, M.goldTrim);
+  bowl.position.set(tx, 4.25, tz);
+  bowl.name='torch_bowl_'+i;
+  worldGroup.add(bowl);
+  // Flame (emissive sphere)
+  const flameGeo = new THREE.SphereGeometry(0.2, 6, 5);
+  const flame    = new THREE.Mesh(flameGeo, M.magma);
+  flame.position.set(tx, 4.58, tz);
+  flame.name='torch_flame_'+i;
+  worldGroup.add(flame);
+});
+
+// ── OUTER TERRAIN (beyond moat) ───────────────────────────────────────────────
+// Rocky rubble ring
+for(let i=0;i<30;i++){
+  const a = Math.random()*Math.PI*2;
+  const r = 19+Math.random()*4;
+  const s = 0.3+Math.random()*0.7;
+  const rGeo = new THREE.DodecahedronGeometry(s,0);
+  const rock  = new THREE.Mesh(rGeo, M.stoneDark);
+  rock.position.set(Math.sin(a)*r, s*0.3, Math.cos(a)*r);
+  rock.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
+  rock.castShadow=true;
+  rock.name='rubble_'+i;
+  worldGroup.add(rock);
+}
+
+// Ground plane (for A-Frame reference)
+const groundGeo  = new THREE.PlaneGeometry(80, 80, 16, 16);
+const groundMesh = new THREE.Mesh(groundGeo, M.stoneDark);
+groundMesh.rotation.x = -Math.PI/2;
+groundMesh.position.y = -0.26;
+groundMesh.receiveShadow=true;
+groundMesh.name='ground_plane';
+worldGroup.add(groundMesh);
+
+// ── LIGHTING (scene only, not exported) ──────────────────────────────────────
+const ambient = new THREE.AmbientLight(0x1a1010, 0.6);
+scene.add(ambient);
+
+const sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+sunLight.position.set(15, 25, 10);
+sunLight.castShadow=true;
+sunLight.shadow.mapSize.width=sunLight.shadow.mapSize.height=2048;
+sunLight.shadow.camera.far=80;
+sunLight.shadow.camera.near=0.5;
+sunLight.shadow.camera.left=sunLight.shadow.camera.bottom=-30;
+sunLight.shadow.camera.right=sunLight.shadow.camera.top=30;
+scene.add(sunLight);
+
+// Lava glow point lights
+for(let i=0;i<6;i++){
+  const a=(i/6)*Math.PI*2;
+  const r=16.5;
+  const pl = new THREE.PointLight(0xff4400, 1.8, 10);
+  pl.position.set(Math.sin(a)*r, 0.5, Math.cos(a)*r);
+  scene.add(pl);
+}
+// Torch lights
+torchPositions.forEach(([tx,tz])=>{
+  const pl = new THREE.PointLight(0xff8822, 2.5, 8);
+  pl.position.set(tx, 4.6, tz);
+  scene.add(pl);
+});
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+let t=0;
+function animate(){
+  requestAnimationFrame(animate);
+  t+=0.016;
+
+  // Lava bubble pulse
+  worldGroup.traverse(obj=>{
+    if(obj.name&&obj.name.startsWith('lava_bubble')){
+      obj.position.y = 0.35+Math.sin(t*2.5+obj.position.x)*0.12;
+      obj.scale.setScalar(0.85+Math.sin(t*3+obj.position.z)*0.15);
+    }
+    if(obj.name&&obj.name.startsWith('torch_flame')){
+      obj.scale.setScalar(0.8+Math.sin(t*6+obj.position.x)*0.25);
+    }
+  });
+
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+function resize(){
+  const rect = wrap.getBoundingClientRect();
+  const w = Math.floor(rect.width);
+  const h = Math.floor(rect.height);
+  if(w === 0 || h === 0) return;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+// Resize on container changes and window resize
+new ResizeObserver(resize).observe(wrap);
+window.addEventListener('resize', resize);
+// Delay first call to ensure layout is complete
+setTimeout(resize, 0);
+
+animate();
+
+// ── GLB Export ────────────────────────────────────────────────────────────────
+function exportGLB(){
+  status.textContent='Exporting…';
+  status.className='working';
+
+  // Snapshot static positions (no animation offsets)
+  const exporter = new THREE.GLTFExporter();
+  // Reset animated objects to base
+  worldGroup.traverse(obj=>{
+    if(obj.name&&obj.name.startsWith('lava_bubble')) obj.position.y=0.35;
+    if(obj.name&&obj.name.startsWith('torch_flame')) obj.scale.setScalar(1);
+  });
+  worldGroup.updateMatrixWorld(true);
+
+  setTimeout(()=>{
+    exporter.parse(worldGroup, glb=>{
+      const blob = new Blob([glb], {type:'application/octet-stream'});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href=url; a.download='pvp_coliseum_world.glb'; a.click();
+      URL.revokeObjectURL(url);
+      status.textContent='Exported ✓';
+      status.className='ok';
+    },{binary:true});
+  },50);
+}
+</script>
+
+<!-- A-Frame import guide -->
+<script>
+// Print A-Frame usage hint to console
+console.log(`
+%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PVP Coliseum — A-Frame Import Guide
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Export the .glb file (click "Export .glb" button)
+2. Place pvp_coliseum_world.glb in your project folder
+3. In your A-Frame scene:
+
+<a-scene>
+  <a-assets>
+    <a-asset-item id="world" src="pvp_coliseum_world.glb"></a-asset-item>
+  </a-assets>
+
+  <!-- Place the world -->
+  <a-entity gltf-model="#world" position="0 0 0" scale="1 1 1"></a-entity>
+
+  <!-- Player spawn points -->
+  <a-entity id="spawn-red"  position="0 0.6 -11"></a-entity>
+  <a-entity id="spawn-blue" position="0 0.6  11"></a-entity>
+</a-scene>
+`, 'color:#c9a84c;font-family:monospace;font-size:13px');
+</script>
+
+</body>
+</html>
