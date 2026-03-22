@@ -116,22 +116,25 @@ setInterval(() => {
 // RECEIVE — move a remote player's entity
 // ============================================
 function updateRemotePlayer(msg) {
-    // add at top of function
-    console.log('[ROT] Received rotation y:', msg.rotation?.y, 'for', msg.clientId);
-  const id = `remote-${msg.clientId}`;
-
-  if (!spawnedRemotePlayers.has(id)) {
-    spawnRemotePlayer(id, msg);
-    return;
-  }
+    const id = `remote-${msg.clientId}`;
 
   remoteTargets[id] = {
     position: msg.position,
     rotation: msg.rotation,
   };
+
+  // only spawn if not already spawned AND we have lobby data for this player
+  if (!spawnedRemotePlayers.has(id)) {
+    const lobbyEntry = LOBBY.find(p => p.clientId === msg.clientId);
+    if (lobbyEntry) {
+      spawnRemotePlayer(id, msg);
+    }
+    }
 }
 
 function spawnRemotePlayer(id, msg) {
+    // guard at the top — prevents race condition with gameState + playerMove
+  if (spawnedRemotePlayers.has(id)) return;
   spawnedRemotePlayers.add(id);
 
   const lobbyPlayer = LOBBY.find(p => p.clientId === msg.clientId);
