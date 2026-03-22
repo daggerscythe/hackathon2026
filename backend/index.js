@@ -216,12 +216,56 @@ wsServer.on("request", request => {
     }
 
     if (method === 'identify') {
-      // re-link this connection to the stored clientId
       const existingId = msg.clientId;
-      if (existingId && clients[existingId] === undefined) {
-        // client navigated pages — re-register under their original id
-        clients[existingId] = { connection: conn, username: client.username };
-        delete clients[clientId]; // remove the temp id
+      const gameId     = msg.gameId;
+
+      if (!existingId || !gameId) return;
+
+      // re-register this connection under the original clientId
+      if (clients[existingId]) {
+        // update existing entry with new connection
+        clients[existingId].connection = conn;
+      } else {
+        // first time seeing this clientId on this connection
+        clients[existingId] = { connection: conn, username: msg.username };
+      }
+
+      // remove the temp clientId assigned on connect
+      if (clientId !== existingId) {
+        delete clients[clientId];
+      }
+
+      // make sure this player is in the game's player list
+      const game = games[gameId];
+      if (game) {
+        const alreadyIn = game.players.find(p => p.clientId === existingId);
+        if (!alreadyIn) {
+          game.players.push({
+            clientId: existingId,
+            username: msg.username || existingId,
+            color:    'White',
+            ready:    true,
+            character: null,
+          });
+        } else {
+          // update connection reference
+          alreadyIn.clientId = existingId;
+        }
+
+        console.log(`Player ${existingId} re-identified in game ${gameId}`);
+
+        // tell this player about everyone else currently in the game
+        // so they can spawn remote entities immediately
+        send(conn, {
+          method:  'gameState',
+          players: game.players
+            .filter(p => p.clientId !== existingId)
+            .map(p => ({
+              clientId:  p.clientId,
+              username:  p.username,
+              character: p.character,
+            })),
+        });
       }
     }
 
@@ -230,11 +274,11 @@ wsServer.on("request", request => {
       const game = games[msg.gameId];
       if (!game) return;
 
-      // broadcast to everyone EXCEPT the sender
+      // use the closure clientId which is now the re-identified one
       game.players.forEach(p => {
-        if (p.clientId === clientId) return;
+        if (p.clientId === msg.clientId) return; // skip sender
         const c = clients[p.clientId];
-        if (c) send(c.connection, { ...msg, clientId });
+        if (c) send(c.connection, { ...msg });
       });
     }
 
