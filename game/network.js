@@ -119,7 +119,7 @@ function updateRemotePlayer(msg) {
 function spawnRemotePlayer(id, msg) {
   spawnedRemotePlayers.add(id);
 
-  // check if initMatchFromLobby already created this entity
+  console.log('Spawning remote player', id, 'at', msg.position.x.toFixed(2), msg.position.y.toFixed(2), msg.position.z.toFixed(2));
   // by looking for a matching username in the lobby
   const lobbyPlayer = LOBBY.find(p => p.clientId === msg.clientId);
   const existingId  = lobbyPlayer ? `remote-player-${LOBBY.indexOf(lobbyPlayer)}` : null;

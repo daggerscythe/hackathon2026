@@ -176,9 +176,6 @@ AFRAME.registerComponent('melee-hitbox', {
       const dist      = myPos.distanceTo(targetPos);
 
       if (dist <= MELEE_RANGE) {
-        console.log(`Melee hit: ${attacker.name} → ${target.name}`);
-        applyHit(this.data.characterId, target.id, 'strength');
-
         const damage = calcDamage(attacker, target, 'strength');
         applyHit(this.data.characterId, target.id, 'strength');
 

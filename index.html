@@ -12,7 +12,7 @@
 
   <script src="game/game.js"></script>
   <script src="game/physics.js"></script>
-  <script stc="game/network.js"></script>
+  <script src="game/network.js"></script>
   <script src="UI/menu.js"></script>
   <script src="game/ui.js"></script>
   <style>
@@ -178,6 +178,9 @@
       const myRole       = sessionStorage.getItem('selectedRole')  || 'villain';
       const myName       = sessionStorage.getItem('selectedCharacter') || 'You';
 
+      // add right after reading sessionStorage values
+      console.log('[LOBBY] My role:', myRole, '| My class:', myClass, '| My name:', myName, '| My clientId:', myClientId);
+      console.log('[LOBBY] Lobby players:', lobbyPlayers);
       // fallback to dummies if no lobby data (solo testing)
       const players = lobbyPlayers.length > 0 ? lobbyPlayers : [
         { username: 'Wonder Hulk',       character: { cls: 'tank',        role: 'hero'    } },
