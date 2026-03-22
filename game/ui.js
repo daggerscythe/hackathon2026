@@ -683,11 +683,54 @@ const CD_CONFIG = {
 const _cdTimers  = {};   // ability → { lastUsed, intervalId }
 const _cdEls     = {};   // ability → { sweep, timer }
 
+// Timer variables
+let timeLeft = 180; // 3 minutes in seconds
+
+function startRoundTimer() {
+  const interval = setInterval(() => {
+    timeLeft--;
+
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
+    timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    // turn red in last 30 seconds
+    timerEl.style.color = timeLeft <= 30 ? '#e74c3c' : 'white';
+
+    if (timeLeft <= 0) {
+      clearInterval(interval);
+      timerEl.textContent = '0:00';
+      // time's up — villain loses if heroes still alive
+      if (typeof endMatch === 'function' && getState() === STATES.BATTLE) {
+        endMatch('hero');
+      }
+    }
+  }, 1000);
+}
+
 function buildHUD() {
   // Root
   hudRoot = document.createElement('div');
   hudRoot.id = 'hud-root';
   document.body.appendChild(hudRoot);
+
+  // ── Round timer
+  const timerEl = document.createElement('div');
+  timerEl.id = 'round-timer';
+  timerEl.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 28px;
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 8px #000;
+    z-index: 999;
+    pointer-events: none;
+  `;
+  timerEl.textContent = '3:00';
+  document.body.appendChild(timerEl);
 
   // ── State banner
   hudBanner = document.createElement('div');
@@ -1066,6 +1109,7 @@ function wireGameEvents() {
     setVillainIdentity(villainId);
     buildHeroRows(heroIds);
     showBanner('Battle!', 2000);
+    startRoundTimer();
 
     // Determine local player for cooldown tracking
     // Heuristic: 'villain' id maps to the local villain entity
