@@ -80,7 +80,6 @@ ws.onmessage = (e) => {
       });
       break;
 
-<<<<<<< Updated upstream
     case 'matchOver':
         if (getState() === STATES.BATTLE) {
             endMatch(msg.winner);
@@ -96,11 +95,9 @@ ws.onmessage = (e) => {
             });
         }
         break;
-=======
     case 'abilityCast':
       handleAbilityCast(msg);
       break;
->>>>>>> Stashed changes
   }
 };
 
