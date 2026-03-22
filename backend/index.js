@@ -79,6 +79,9 @@ function publicGame(game) {
       color:     p.color,
       ready:     p.ready,
       character: p.character,
+      spawnX:    p.spawnX ?? 0,   // NEW CODE
+      spawnY:    p.spawnY ?? 3,   // NEW CODE
+      spawnZ:    p.spawnZ ?? 0,   // NEW CODE
     })),
   };
 }
@@ -217,6 +220,21 @@ wsServer.on("request", request => {
         send(conn, { method: 'error', message: 'Only 1 villain allowed per game.' });
         return;
       }
+
+      // _____________________NEW CODE_______________________
+      // generate a random spawn position for each player
+      // platform is centered at 0,1,0 with width/depth 30
+      // keep players away from edges — use +/- 12 range
+      const PLATFORM_RANGE = 12;
+      game.players.forEach(p => {
+        p.spawnX = (Math.random() - 0.5) * PLATFORM_RANGE * 2;
+        p.spawnZ = (Math.random() - 0.5) * PLATFORM_RANGE * 2;
+        p.spawnY = 3; // above platform surface (platform is at y=1, height 0.5, so top is 1.25)
+        console.log(`[SPAWN] ${p.username} → x:${p.spawnX.toFixed(2)} z:${p.spawnZ.toFixed(2)}`);
+      });
+
+      broadcast(game, { method: 'start', game: publicGame(game) });
+      // _____________________NEW CODE_______________________
 
       broadcast(game, { method: 'start', game: publicGame(game) });
     }
