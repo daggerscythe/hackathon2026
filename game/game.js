@@ -473,7 +473,7 @@ const CLASS_ATTACK_TYPE = {
     // hero classes
     tank: 'strength',
     dps: 'strength',
-    support: 'strength',
+    // support has no attack type — they can only heal
     mage: 'magic',
     // villain classes
     brute: 'strength',
@@ -591,8 +591,19 @@ function performHeal(healerId, healeeId) {
  */
 function performAttack(attackerId, defenderId, direction) {
     const attacker = characters.get(attackerId);
-    if (!attacker || !attacker.isAlive) return; 
+    if (!attacker || !attacker.isAlive) return;
+
+    // Support class cannot attack — they are heal-only
+    if (attacker.chosenClass === 'support') {
+        console.log(`${attacker.name} is a support — cannot attack`);
+        return;
+    }
+
     const attackType = CLASS_ATTACK_TYPE[attacker.chosenClass];
+    if (!attackType) {
+        console.warn(`No attack type defined for class: ${attacker.chosenClass}`);
+        return;
+    }
 
     if (attackType === 'magic') {
         performMagic(attackerId, direction);
@@ -637,23 +648,49 @@ AFRAME.registerComponent('player-controller', {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup',   this.onKeyUp);
 
-    // left click = melee
+    /**
+     * Left mouse button behaviour depends on class:
+     *   support  → heal self
+     *   all others → melee attack
+     */
     this.onMouseDown = (e) => {
       if (e.button !== 0) return;
-      this.tryMelee();
+      const char = characters.get(this.data.characterId);
+      if (char?.chosenClass === 'support') {
+        performHeal(this.data.characterId, this.data.characterId);
+      } else {
+        this.tryMelee();
+      }
     };
 
-    // right click = magic
+    /**
+     * Right mouse button behaviour depends on class:
+     *   support  → heal nearest living ally
+     *   mage     → fire magic projectile
+     *   all others → no right-click action (support classes already handled above)
+     */
     this.onRightClick = (e) => {
       e.preventDefault();
-      this.tryMagic();
+      const char = characters.get(this.data.characterId);
+      if (!char) return;
+      if (char.chosenClass === 'support') {
+        this.tryHealAlly();
+      } else {
+        this.tryMagic();
+      }
     };
 
-    // H key = heal
+    // H key = heal (support: heal nearest ally; others: self-heal if they have the ability)
     this.onHealKey = (e) => {
       if (e.code !== 'KeyH') return;
       const charId = this.data.characterId;
-      performHeal(charId, charId); // self heal by default
+      const char   = characters.get(charId);
+      if (!char) return;
+      if (char.chosenClass === 'support') {
+        this.tryHealAlly();
+      } else {
+        performHeal(charId, charId);
+      }
     };
 
     window.addEventListener('mousedown',       this.onMouseDown);
@@ -728,6 +765,33 @@ AFRAME.registerComponent('player-controller', {
       y: direction.y,
       z: direction.z,
     });
+  },
+
+  /**
+   * Support class: heals the nearest living ally (same role) within range.
+   * Falls back to self-heal if no ally is nearby.
+   */
+  tryHealAlly() {
+    if (getState() !== STATES.BATTLE) return;
+    const charId = this.data.characterId;
+    const char   = characters.get(charId);
+    if (!char || !char.isAlive) return;
+
+    // Find nearest living teammate (same role, not self)
+    const allies = [...characters.values()].filter(c =>
+      c.id !== charId && c.role === char.role && c.isAlive
+    );
+
+    let target = null;
+    if (allies.length > 0) {
+      target = allies.sort((a, b) =>
+        this.distanceTo(a.entityId) - this.distanceTo(b.entityId)
+      )[0];
+    }
+
+    // Heal the ally, or self if none found
+    const healeeId = target ? target.id : charId;
+    performHeal(charId, healeeId);
   },
 
   /**

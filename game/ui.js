@@ -156,6 +156,55 @@
       margin-top: 2px;
     }
 
+    /* Class name badge shown under the character name */
+    .hud-class-name {
+      font-family: var(--font-label);
+      font-size: 0.48rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(201,168,76,0.6);
+      margin-top: -2px;
+    }
+
+    /* Ability pips row — shows which actions a class can use */
+    .hud-abilities {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .hud-ability-pip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px 2px 5px;
+      border: 1px solid rgba(201,168,76,0.2);
+      background: rgba(4,6,12,0.5);
+      font-family: var(--font-mono);
+      font-size: 0.44rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(240,236,228,0.45);
+      white-space: nowrap;
+    }
+
+    .hud-ability-pip.pip-active { border-color: rgba(201,168,76,0.5); color: rgba(240,236,228,0.85); }
+    .hud-ability-pip.pip-active.pip-melee { border-color: rgba(232,150,42,0.6);  color: #e8962a; }
+    .hud-ability-pip.pip-active.pip-magic { border-color: rgba(150,100,220,0.6); color: #c09aee; }
+    .hud-ability-pip.pip-active.pip-heal  { border-color: rgba(76,201,76,0.55);  color: #60d060; }
+    .hud-ability-pip.pip-inactive { opacity: 0.28; filter: grayscale(1); }
+
+    /* cd-slot dimmed state for abilities a class can't use */
+    .cd-slot.cd-unavailable {
+      opacity: 0.22;
+      filter: grayscale(1);
+      pointer-events: none;
+    }
+    .cd-slot.cd-unavailable .cd-icon {
+      border-color: rgba(255,255,255,0.08);
+      box-shadow: none;
+    }
+
     /* ═══════════════════════════════════════════════════════════════════════
        HERO PANEL — bottom-right
     ═══════════════════════════════════════════════════════════════════════ */
@@ -772,6 +821,8 @@ function buildHUD() {
   hudVillain.innerHTML = `
     <div class="hud-role-label">— Villain</div>
     <div class="hud-name" id="villain-name">—</div>
+    <div class="hud-class-name" id="villain-class"></div>
+    <div class="hud-abilities" id="villain-abilities"></div>
     <div class="hud-bar-track">
       <div class="hud-bar-fill villain-fill" id="villain-fill" style="width:100%"></div>
     </div>
@@ -901,17 +952,83 @@ function buildHeroRows(heroIds) {
     hudHeroes.appendChild(row);
     _heroRows.set(id, row);
 
-    // seed cache
-    _hpCache.set(id, { health: 100, maxHealth: 100 });
+    // seed cache from real character data
+    const hp = char ? (char.health ?? char.maxHealth) : 100;
+    const maxHp = char ? char.maxHealth : 100;
+    _hpCache.set(id, { health: hp, maxHealth: maxHp });
+
+    // set real starting values on the bar
+    const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+    const fillEl = row.querySelector(`#hero-fill-${id}`);
+    const hpEl   = row.querySelector(`#hero-hp-${id}`);
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (hpEl)   hpEl.textContent   = Math.ceil(hp) + ' / ' + maxHp;
   });
+}
+
+// Maps each class to the abilities it can use
+const CLASS_ABILITIES = {
+  tank:         { melee: true,  magic: false, heal: false },
+  dps:          { melee: true,  magic: false, heal: false },
+  support:      { melee: false, magic: false, heal: true  },
+  mage:         { melee: false, magic: true,  heal: false },
+  brute:        { melee: true,  magic: false, heal: false },
+  agile:        { melee: true,  magic: false, heal: false },
+  villain_mage: { melee: false, magic: true,  heal: false },
+};
+
+const ABILITY_DISPLAY = [
+  { key: 'melee', icon: '\u2694', label: 'Melee', mod: 'pip-melee' },
+  { key: 'magic', icon: '\U0001F52E', label: 'Magic', mod: 'pip-magic' },
+  { key: 'heal',  icon: '\U0001F49A', label: 'Heal',  mod: 'pip-heal'  },
+];
+
+function buildAbilityPips(containerId, chosenClass) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const abilities = CLASS_ABILITIES[chosenClass] ?? {};
+  container.innerHTML = '';
+  ABILITY_DISPLAY.forEach(({ key, icon, label, mod }) => {
+    const active = !!abilities[key];
+    const pip = document.createElement('div');
+    pip.className = 'hud-ability-pip ' + (active ? 'pip-active ' + mod : 'pip-inactive');
+    pip.textContent = icon + ' ' + label;
+    container.appendChild(pip);
+  });
+}
+
+function refreshCooldownSlots(chosenClass) {
+  const abilities = CLASS_ABILITIES[chosenClass] ?? {};
+  const meleeSlot = _cdEls['melee']?.icon?.closest('.cd-slot');
+  const magicSlot = _cdEls['magic']?.icon?.closest('.cd-slot');
+  const healSlot  = _cdEls['heal']?.icon?.closest('.cd-slot');
+  if (meleeSlot) meleeSlot.classList.toggle('cd-unavailable', !abilities.melee);
+  if (magicSlot) magicSlot.classList.toggle('cd-unavailable', !abilities.magic);
+  if (healSlot)  healSlot.classList.toggle('cd-unavailable',  !abilities.heal);
 }
 
 function setVillainIdentity(id) {
   _villainId = id;
   const char = characters.get(id);
   if (!char) return;
+
   document.getElementById('villain-name').textContent = char.name;
-  _hpCache.set(id, { health: 100, maxHealth: 100 });
+
+  const classEl = document.getElementById('villain-class');
+  if (classEl) classEl.textContent = char.chosenClass ?? '';
+
+  buildAbilityPips('villain-abilities', char.chosenClass);
+
+  const hp = char.health ?? char.maxHealth;
+  _hpCache.set(id, { health: hp, maxHealth: char.maxHealth });
+
+  const pct = Math.max(0, Math.min(100, (hp / char.maxHealth) * 100));
+  const fill = document.getElementById('villain-fill');
+  const hpEl = document.getElementById('villain-hp');
+  if (fill) fill.style.width = pct + '%';
+  if (hpEl) hpEl.textContent = Math.ceil(hp) + ' / ' + char.maxHealth;
+
+  refreshCooldownSlots(char.chosenClass);
 }
 
 
