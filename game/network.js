@@ -101,6 +101,8 @@ setInterval(() => {
   const euler = new THREE.Euler();
   euler.setFromQuaternion(worldQuat, 'YXZ');
 
+  console.log('[ROT] Sending rotation y:', euler.y, 'for', MY_ID);
+
   ws.send(JSON.stringify({
     method:   'playerMove',
     clientId: MY_ID,
@@ -114,6 +116,8 @@ setInterval(() => {
 // RECEIVE — move a remote player's entity
 // ============================================
 function updateRemotePlayer(msg) {
+    // add at top of function
+    console.log('[ROT] Received rotation y:', msg.rotation?.y, 'for', msg.clientId);
   const id = `remote-${msg.clientId}`;
 
   if (!spawnedRemotePlayers.has(id)) {
@@ -183,9 +187,11 @@ AFRAME.registerComponent('network-lerp', {
       // rotate model child to match camera yaw — same pattern as physics.js
       const modelEl = el.querySelector('a-gltf-model');
       if (modelEl) {
+        // add inside the modelEl block
+        console.log('[ROT] Lerping', id, 'model rotation to', target.rotation.y);
         modelEl.object3D.rotation.y = THREE.MathUtils.lerp(
           modelEl.object3D.rotation.y,
-          target.rotation.y,
+          target.rotation.y + Math.PI,
           t
         );
       }

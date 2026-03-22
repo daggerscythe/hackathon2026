@@ -207,7 +207,9 @@
       // update local player model and attack-input to match chosen class
       const localModel = document.getElementById('villain-model');
       if (localModel) {
-        localModel.setAttribute('src', `#${CLASS_MODEL[myClass] || 'model-brute'}`);
+        const modelSrc = `#${CLASS_MODEL[myClass] || 'model-brute'}`;
+        console.log('[MODEL] Setting local model to:', modelSrc);
+        localModel.setAttribute('src', modelSrc);
       }
       if (localPlayerEl) {
         localPlayerEl.setAttribute('attack-input', `characterId: villain; attackClass: ${myClass}`);
@@ -333,7 +335,7 @@
     >
       <a-gltf-model
         id="villain-model"
-        src="#model-brute"
+        src="#brute"
         scale="0.8 0.8 0.8"
         position="0 0 0"
       ></a-gltf-model>
