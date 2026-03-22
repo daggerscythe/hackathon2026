@@ -142,7 +142,6 @@ Characters are classified at load time by their stats. A player picks a class du
     
 ## Inutitive user UI & mechanisms:
 
-
 ### Color Scheme
 
 ## Modeling Params

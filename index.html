@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Slaying The Goliath</title>
+  <title>Slaying Goliath</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -12,6 +12,7 @@
 
   <script src="game/game.js"></script>
   <script src="game/physics.js"></script>
+  <script stc="game/network.js"></script>
   <script src="UI/menu.js"></script>
 
   <style>
@@ -52,6 +53,17 @@
   </style>
 
   <script>
+    const CLASS_MODEL = {
+      // villain
+      villain_mage: 'model-villain-mage',
+      brute:        'model-brute',
+      agile:        'model-agile',
+      // hero
+      mage:         'model-hero-mage',
+      support:      'model-support',
+      dps:          'model-dps',
+      tank:         'model-tank',
+    };
     // ============================================
     // BILLBOARD HEALTH BAR COMPONENT
     // Projects a world position to screen space
@@ -154,59 +166,67 @@
 
 
     // ============================================
-    // SPAWN HELPER — places models at random positions
-    // called after scene loads
+    // INITIALIZE LOBBY
     // ============================================
-    function spawnPlaceholderPlayers() {
+    function initMatchFromLobby() {
       const scene = document.querySelector('a-scene');
 
-      const players = [
-        { id: 'npc-hero-1',    model: 'hero',    nickname: 'Wonder Hulk',     role: 'hero'    },
-        { id: 'npc-hero-2',    model: 'hero',    nickname: 'Super Girl',       role: 'hero'    },
-        { id: 'npc-hero-3',    model: 'hero',    nickname: 'Metal Knight',     role: 'hero'    },
-        { id: 'npc-villain',   model: 'villain', nickname: 'Professor Darkness', role: 'villain' },
-        { id: 'npc-mage',      model: 'mage',    nickname: 'Doctor X',         role: 'hero'    },
-        { id: 'npc-brute',     model: 'brute',   nickname: 'Omega Claw',       role: 'villain' },
-        { id: 'npc-agile',     model: 'agile',   nickname: 'Dark Daredevil',   role: 'hero'    },
+      // read lobby data from sessionStorage
+      const lobbyPlayers = JSON.parse(sessionStorage.getItem('lobbyPlayers') || '[]');
+      const myClientId   = sessionStorage.getItem('clientId');
+      const myClass      = sessionStorage.getItem('selectedClass') || 'brute';
+      const myRole       = sessionStorage.getItem('selectedRole')  || 'villain';
+      const myName       = sessionStorage.getItem('selectedCharacter') || 'You';
+
+      // fallback to dummies if no lobby data (solo testing)
+      const players = lobbyPlayers.length > 0 ? lobbyPlayers : [
+        { username: 'Wonder Hulk',       character: { cls: 'tank',        role: 'hero'    } },
+        { username: 'Super Girl',        character: { cls: 'dps',         role: 'hero'    } },
+        { username: 'Metal Knight',      character: { cls: 'support',     role: 'hero'    } },
+        { username: 'Professor Darkness',character: { cls: 'villain_mage',role: 'villain' } },
       ];
 
-      players.forEach(p => {
-        // random position on the green plane, away from center
-        const x = (Math.random() - 0.5) * 24;
-        const z = (Math.random() - 0.5) * 24;
+      players.forEach((p, i) => {
+        const cls      = p.character?.cls  || 'tank';
+        const role     = p.character?.role || 'hero';
+        const nickname = p.username        || `Player ${i + 1}`;
+
+        // skip ourselves — local player is already in the scene
+        if (p.clientId === myClientId) return;
+
+        const id = `remote-player-${i}`;
+        const x  = (Math.random() - 0.5) * 24;
+        const z  = (Math.random() - 0.5) * 24;
 
         const entity = document.createElement('a-entity');
-        entity.setAttribute('id', p.id);
-        entity.setAttribute('position', `${x} 2.2 ${z}`);
-        entity.setAttribute('health-bar', `nickname: ${p.nickname}; health: 100; maxHealth: 100`);
+        entity.setAttribute('id',         id);
+        entity.setAttribute('position',   `${x} 3 ${z}`);
+        entity.setAttribute('health-bar', `nickname: ${nickname}; health: 100; maxHealth: 100`);
 
-        // load the GLB model
         const model = document.createElement('a-gltf-model');
-        model.setAttribute('src', `assets/models/${p.model}.glb`);
-        model.setAttribute('scale', '0.8 0.8 0.8');
-        model.setAttribute('rotation', `0 ${Math.random() * 360} 0`); // random facing
+        model.setAttribute('src',      `#${CLASS_MODEL[cls] || 'model-tank'}`);
+        model.setAttribute('scale',    '0.8 0.8 0.8');
+        model.setAttribute('rotation', `0 ${Math.random() * 360} 0`);
 
         entity.appendChild(model);
         scene.appendChild(entity);
 
-        addCharacter(p.id, p.role, p.model, {
-          name:     p.nickname,
-          strength: 70,
-          magic:    60,
-          defense:  30,
-          speed:    50,
-          power:    40,
-        }, p.id);
+        addCharacter(id, role, cls, {
+          name: nickname, strength: 70, magic: 60, defense: 30, speed: 50, power: 40,
+        }, id);
       });
-      // register local player
-      addCharacter('villain', 'villain', 'brute', {
-        name:     'You',
-        strength: 80,
-        magic:    75,
-        defense:  60,
-        speed:    50,
-        power:    20,
+
+      // register local player with their actual selected class
+      addCharacter('villain', myRole, myClass, {
+        name:     myName,
+        strength: 80, magic: 75, defense: 60, speed: 50, power: 20,
       }, 'player-villain');
+
+      // update local player's model to match chosen class
+      const localModel = document.getElementById('villain-model');
+      if (localModel) {
+        localModel.setAttribute('src', `#${CLASS_MODEL[myClass] || 'model-brute'}`);
+      }
 
       transitionTo(STATES.BATTLE);
     }
@@ -215,9 +235,9 @@
     document.addEventListener('DOMContentLoaded', () => {
       const scene = document.querySelector('a-scene');
       if (scene.hasLoaded) {
-        spawnPlaceholderPlayers();
+        initMatchFromLobby();
       } else {
-        scene.addEventListener('loaded', spawnPlaceholderPlayers);
+        scene.addEventListener('loaded', initMatchFromLobby);
       }
     });
   </script>
@@ -232,18 +252,23 @@
       shadow="type: pcfsoft"
       physics="gravity: -9.8; debug: true"
       game-manager
+      network-lerp
     >
 
     <!-- Assets -->
     <a-assets timeout="10000">
       <img id="sky"       src="assets/textures/sky.jpg"/>
       <img id="sky_night" src="assets/textures/sky_night.jpg"/>
-      <a-asset-item id="model-hero"    src="assets/models/hero.glb"></a-asset-item>
-      <a-asset-item id="model-villain" src="assets/models/villain.glb"></a-asset-item>
-      <a-asset-item id="model-mage"    src="assets/models/mage.glb"></a-asset-item>
-      <a-asset-item id="model-brute"   src="assets/models/brute.glb"></a-asset-item>
-      <a-asset-item id="model-agile"   src="assets/models/agile.glb"></a-asset-item>
-      <a-asset-item id="sword"    src="assets/models/sword.glb"></a-asset-item>
+      <!-- villain classes -->
+      <a-asset-item id="model-villain-mage" src="assets/models/villain_mage.glb"></a-asset-item>
+      <a-asset-item id="model-brute"        src="assets/models/brute.glb"></a-asset-item>
+      <a-asset-item id="model-agile"        src="assets/models/agile.glb"></a-asset-item>
+
+      <!-- hero classes -->
+      <a-asset-item id="model-hero-mage"    src="assets/models/hero_mage.glb"></a-asset-item>
+      <a-asset-item id="model-support"      src="assets/models/support.glb"></a-asset-item>
+      <a-asset-item id="model-dps"          src="assets/models/dps.glb"></a-asset-item>
+      <a-asset-item id="model-tank"         src="assets/models/tank.glb"></a-asset-item><a-asset-item id="sword"    src="assets/models/sword.glb"></a-asset-item>
       <a-asset-item id="fireball" src="assets/models/fireball.glb"></a-asset-item>
       <a-asset-item id="arena" src="assets/models/arena.glb"></a-asset-item>
     </a-assets>
@@ -288,7 +313,7 @@
     >
       <a-gltf-model
         id="villain-model"
-        src="#model-villain"
+        src="#model-brute"
         scale="0.8 0.8 0.8"
         position="0 0 0"
       ></a-gltf-model>

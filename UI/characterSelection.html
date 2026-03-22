@@ -380,6 +380,13 @@
 let CHARACTERS = [];
 let selectedIdx = null;
 
+const ws = new WebSocket('ws://' + location.hostname + ':9090');
+ws.onopen = () => {
+  // re-identify ourselves to the WS server on this page
+  const clientId = sessionStorage.getItem('clientId');
+  ws.send(JSON.stringify({ method: 'identify', clientId }));
+};
+
 function csvToJson(csvString) {
   const rows    = csvString.split("\n");
   const headers = rows[0].split(",").map(h => h.trim());
@@ -600,9 +607,20 @@ function confirmSelection() {
   if (selectedIdx === null) { alert('Choose a champion first.'); return; }
   const chosen = CHARACTERS[selectedIdx];
   sessionStorage.setItem('selectedCharacter', chosen.name);
-  sessionStorage.setItem('selectedClass',     chosen.cls);
-  // Proceed to the game arena
-  window.location.href = '/index.html';
+  sessionStorage.setItem('selectedClass', chosen.cls);
+  sessionStorage.setItem('selectedRole', isVillainSide ? 'villain' : 'hero');
+
+  // tell server this player is ready with their character choice
+  const gameId = sessionStorage.getItem('gameId');
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      method:    'ready',
+      gameId,
+      character: { name: chosen.name, cls: chosen.cls, role: isVillainSide ? 'villain' : 'hero' },
+    }));
+  }
+
+  window.location.href = '../index.html';
 }
 function goBack() { window.location.href = 'pinCode.html'; }
   

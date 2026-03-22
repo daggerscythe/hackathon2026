@@ -309,7 +309,7 @@
   <div class="lobby-right">
     <div class="player-count">
       <span class="player-count-num" id="count-num">0</span>
-      <span class="player-count-label">/ 6 Players</span>
+      <span class="player-count-label">/ 4 Players</span>
     </div>
     <p class="waiting-text" id="waiting-text">Awaiting adventurers…</p>
     <p class="connection-status" id="conn-status">Connecting…</p>
@@ -328,7 +328,7 @@
     let myCharacter   = null;
     let myReady       = false;
 
-    const MAX_PLAYERS = 6;
+    const MAX_PLAYERS = 4;
     const MIN_START   = 2;
 
     // ── Screen navigation ─────────────────────────────────────────────────
@@ -385,6 +385,7 @@
 
         case 'connect':
           clientId = msg.clientId;
+          sessionStorage.setItem('clientId', msg.clientId);
           setStatus('Connected', 'connected');
           if (onReady) onReady();
           break;
@@ -413,6 +414,8 @@
           sessionStorage.setItem('lobbyWsHost',    serverIP || 'localhost');
           sessionStorage.setItem('characterSide',  myCharacter || 'Hero');
           sessionStorage.setItem('gameId',         currentGameId);
+          sessionStorage.setItem('clientId',       clientId);        // add — re-save in case page refreshed
+          sessionStorage.setItem('lobbyPlayers',   JSON.stringify(msg.game.players)); // add this
           window.location.href = 'characterSelection.html';
           break;
 
@@ -564,6 +567,13 @@
         hint.innerHTML = `Waiting for <span>${needed}</span> more`;
       } else if (myReady) {
         hint.innerHTML = `<span>${readyCount}/${players.length}</span> ready`;
+      }
+
+      // update start button text based on ready state
+      if (isHost) {
+        const startBtn  = document.getElementById('start-btn');
+        const allReady  = players.length >= MIN_START && players.every(p => p.ready);
+        startBtn.textContent = allReady ? 'Start →' : 'Force Start →';
       }
     }
 

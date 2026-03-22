@@ -52,8 +52,8 @@ const clients = {};
 // gameId (4-char PIN) → { id, players: [{clientId, username, color}] }
 const games = {};
 
-const COLORS      = ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"];
-const MAX_PLAYERS = 6;
+const COLORS      = ["Red", "Green", "Blue", "Yellow"];
+const MAX_PLAYERS = 4;
 const MIN_START   = 2;
 
 // ── Helper: send JSON to a single connection ──────────────────────────────
@@ -175,20 +175,86 @@ wsServer.on("request", request => {
 
       const pg = publicGame(game);
       broadcast(game, { method: "ready", game: pg });
-
-      // Auto-start when all players (≥ MIN_START) are ready
-      const allReady = game.players.length >= MIN_START && game.players.every(p => p.ready);
-      if (allReady) {
-        broadcast(game, { method: "start", game: pg });
-      }
     }
 
     // ── START: host force-start override ────────────────────────────────
     if (method === "start") {
       const game = games[msg.gameId];
       if (!game) return;
-      if (game.players[0]?.clientId !== clientId) return;
-      broadcast(game, { method: "start", game: publicGame(game) });
+      // only host can start
+      if (game.players[0]?.clientId !== clientId) {
+        send(conn, { method: 'error', message: 'Only the host can start the game.' });
+        return;
+      }
+
+      // must have at least 2 players
+      if (game.players.length < MIN_START) {
+        send(conn, { method: 'error', message: 'Need at least 2 players to start.' });
+        return;
+      }
+
+      // count villains
+      const villainCount = game.players.filter(p => {
+        const char = p.character;
+        if (!char) return false;
+        // handle both string 'Villain' and object { role: 'villain' }
+        if (typeof char === 'string') return char === 'Villain';
+        return char.role === 'villain';
+      }).length;
+
+      if (villainCount === 0) {
+        send(conn, { method: 'error', message: 'Need exactly 1 villain to start.' });
+        return;
+      }
+
+      if (villainCount > 1) {
+        send(conn, { method: 'error', message: 'Only 1 villain allowed per game.' });
+        return;
+      }
+
+      broadcast(game, { method: 'start', game: publicGame(game) });
+    }
+
+    if (method === 'identify') {
+      // re-link this connection to the stored clientId
+      const existingId = msg.clientId;
+      if (existingId && clients[existingId] === undefined) {
+        // client navigated pages — re-register under their original id
+        clients[existingId] = { connection: conn, username: client.username };
+        delete clients[clientId]; // remove the temp id
+      }
+    }
+
+    // ── MOVE: relay position to everyone else in the game ───────────────
+    if (method === 'playerMove') {
+      const game = games[msg.gameId];
+      if (!game) return;
+
+      // broadcast to everyone EXCEPT the sender
+      game.players.forEach(p => {
+        if (p.clientId === clientId) return;
+        const c = clients[p.clientId];
+        if (c) send(c.connection, { ...msg, clientId });
+      });
+    }
+
+    // ── ATTACK: relay attack to everyone else ───────────────────────────
+    if (method === 'playerAttack') {
+      const game = games[msg.gameId];
+      if (!game) return;
+
+      game.players.forEach(p => {
+        if (p.clientId === clientId) return;
+        const c = clients[p.clientId];
+        if (c) send(c.connection, { ...msg, clientId });
+      });
+    }
+
+    // ── PLAYER DIED: relay to everyone ──────────────────────────────────
+    if (method === 'playerDied') {
+      const game = games[msg.gameId];
+      if (!game) return;
+      broadcast(game, { ...msg, clientId });
     }
   });
 });
