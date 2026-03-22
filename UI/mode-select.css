@@ -200,3 +200,48 @@ body {
   width: auto;
   padding: 10px 4px;
 }
+
+
+/* make cards appear locked */
+.mode-card.locked {
+  cursor: not-allowed;
+  pointer-events: none; /* or keep pointer-events if you want a tooltip on hover */
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  border-color: rgba(201, 168, 76, 0.08);
+  background: rgba(0, 0, 0, 0.08);
+  transform: none !important;
+}
+
+.mode-card.locked::before {
+  display: none;
+}
+
+.mode-card.locked .mode-card-icon::after {
+  content: ' 🔒';
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
+
+/* Lock badge — top-right corner */
+.mode-card.locked .lock-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.52rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  opacity: 0.55;
+}
+
+/* Dim the text further */
+.mode-card.locked .mode-title {
+  color: var(--white-faint);
+  text-shadow: none;
+}
+
+.mode-card.locked .mode-description {
+  color: rgba(240, 236, 228, 0.2);
+}

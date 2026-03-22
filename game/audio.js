@@ -6,6 +6,13 @@
 // holds sounds
 const SOUNDS = {
     heal: 'assets/sounds/skyrim-healing.mp3',
+    sword_sound: 'assets/sounds/sword_sound_effect.mp3',
+    death: 'assets/sounds/scream.mp3',
+    fire_ball: 'assets/sounds/fireball.mp3',
+    victory_hero: 'assets/sounds/victory-hero.mp3',
+    victory_villain: 'assets/sounds/victory-villian.mp3',
+    game_theme: 'assets/sounds/Dark Souls - CC.mp3',
+    battle_theme: 'assets/sounds/battle-dun-dun.mp3'
 };
 
 // audio cache
@@ -68,21 +75,49 @@ function getLocalCharacterId() {
     return null;
 }
 
-// ─── Event Wiring ─────────────────────────────────
-// Wait for the DOM so A-Frame and game.js are fully initialised.
+// event wiring
+// wait for the DOM so A-Frame and game.js are fully initialised.
+// listen for every event emitted by game.js.
+count = 0;
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Listen for every heal event emitted by game.js.
-    // Only play audio when the healer is the local player —
-    // this keeps audio purely client-side regardless of how many
-    // characters game.js is tracking across the network.
     onHealPerformed(({ healerId }) => {
-        console.log("on heal performed")
         const localId = getLocalCharacterId();
-        if (!localId) return;           // scene not ready yet
-        if (healerId !== localId) return; // someone else healed, not our sound to play
+        if (!localId) return;
+        if (healerId !== localId) return;
 
         playSound('heal');
     });
+
+    onCharacterDefeated(({ characterId }) => {
+        const localId = getLocalCharacterId();
+        if (!localId) return;
+        if (characterId !== localId) return; // only play if the local player died
+
+        playSound('death');
+    });
+
+    onMagicFired(({ attackerId }) => {
+        const localId = getLocalCharacterId();
+        if (!localId) return;
+        if (attackerId !== localId) return;
+
+        playSound('fire_ball');
+    });
+
+    onMeleeFired(({ attackerId }) => {
+        const localId = getLocalCharacterId();
+        if (!localId) return;
+        if (attackerId !== localId) return;
+
+        console.log("FIRED MELEE")
+        playSound('fire_ball');
+    });
+
+    onMatchStarted(() => {
+        playSound('battle_theme');
+    });
+
+    vict
 
 });
