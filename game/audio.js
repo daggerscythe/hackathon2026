@@ -112,8 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!localId) return;
         if (attackerId !== localId) return;
 
-        console.log("FIRED MELEE")
-        playSound('fire_ball');
+        playSound('sword_sound');
     });
 
     onMatchStarted(() => {
