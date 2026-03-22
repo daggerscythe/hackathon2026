@@ -73,7 +73,13 @@ function broadcast(game, payload) {
 function publicGame(game) {
   return {
     id:      game.id,
-    players: game.players.map(p => ({ username: p.username, color: p.color, ready: p.ready, character: p.character })),
+    players: game.players.map(p => ({
+      clientId:  p.clientId,  // add this
+      username:  p.username,
+      color:     p.color,
+      ready:     p.ready,
+      character: p.character,
+    })),
   };
 }
 
@@ -95,7 +101,7 @@ function makeId() {
 // ── WebSocket connections ─────────────────────────────────────────────────
 wsServer.on("request", request => {
   const conn     = request.accept(null, request.origin);
-  const clientId = makeId();
+  let clientId = makeId();
   clients[clientId] = { connection: conn, username: null };
 
   // Tell the browser its assigned ID immediately
@@ -233,6 +239,7 @@ wsServer.on("request", request => {
       // remove the temp clientId assigned on connect
       if (clientId !== existingId) {
         delete clients[clientId];
+        clientId = existingId;
       }
 
       // make sure this player is in the game's player list
