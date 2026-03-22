@@ -6,87 +6,74 @@
   <title>Lobby</title>
   <link rel="stylesheet" href="menu.css" />
   <style>
-    body { align-items: stretch; justify-content: flex-start; }
+    body { align-items: stretch; justify-content: flex-start; overflow: hidden; }
 
-    #bg-canvas {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    #bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .page-wrap {
+      position: relative; z-index: 1;
+      display: flex; width: 100vw; height: 100vh; overflow: hidden;
     }
 
-    /* ── Shared panel base ───────────────────────────────────────────────── */
+    /* ── LEFT PANEL ─────────────────────────────────────────────────────── */
     .lobby-left {
-      position: relative; z-index: 1;
-      padding: 0 0 0 7vw;
-      width: 420px; flex-shrink: 0;
+      width: 400px; flex-shrink: 0;
+      padding: 0 0 0 6vw;
       display: flex; flex-direction: column;
       justify-content: center; height: 100vh; gap: 0;
+      position: relative;
     }
-    .lobby-left::before {
+    .lobby-left::after {
       content: ''; position: absolute;
-      left: calc(7vw - 18px); top: 15%; height: 70%; width: 1px;
-      background: linear-gradient(180deg, transparent, var(--gold), transparent);
-      opacity: 0.6;
+      right: 0; top: 10%; height: 80%; width: 1px;
+      background: linear-gradient(180deg, transparent, rgba(201,168,76,0.3), transparent);
     }
 
-    /* ── Step screens (only one visible at a time) ───────────────────────── */
+    /* ── Step screens ────────────────────────────────────────────────────── */
     .screen { display: none; flex-direction: column; gap: 0; }
     .screen.active { display: flex; }
 
-    /* ── Text inputs — styled to match the RPG theme ─────────────────────── */
+    /* ── Text inputs ─────────────────────────────────────────────────────── */
     .rpg-input {
-      font-family: 'Cinzel', serif;
-      font-size: 0.9rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
+      font-family: 'Cinzel', serif; font-size: 0.9rem;
+      letter-spacing: 3px; text-transform: uppercase;
       background: rgba(201,168,76,0.06);
       border: 1px solid rgba(201,168,76,0.3);
-      color: var(--white);
-      padding: 12px 14px;
-      outline: none;
-      width: 100%;
-      transition: border-color 0.18s, box-shadow 0.18s;
-      margin-bottom: 14px;
+      color: var(--white); padding: 12px 14px; outline: none; width: 100%;
+      transition: border-color 0.18s, box-shadow 0.18s; margin-bottom: 14px;
     }
     .rpg-input::placeholder { color: var(--white-faint); letter-spacing: 2px; }
-    .rpg-input:focus {
-      border-color: var(--gold);
-      box-shadow: 0 0 12px rgba(201,168,76,0.25);
-    }
+    .rpg-input:focus { border-color: var(--gold); box-shadow: 0 0 12px rgba(201,168,76,0.25); }
 
-    /* ── Labels & text ───────────────────────────────────────────────────── */
+    /* ── Labels ──────────────────────────────────────────────────────────── */
     .section-label {
       font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
       color: var(--gold-dim); margin-bottom: 8px;
-      animation: fadeSlideUp 0.5s ease both;
     }
     .join-url {
       font-family: 'Cinzel Decorative', serif;
       font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 700;
       color: var(--gold-light); letter-spacing: 3px; margin-bottom: 4px;
       text-shadow: 0 0 30px rgba(201,168,76,0.5);
-      animation: fadeSlideUp 0.5s 0.1s ease both;
     }
     .join-sub {
       font-size: 0.68rem; letter-spacing: 4px; text-transform: uppercase;
       color: var(--white-faint); margin-bottom: 28px;
-      animation: fadeSlideUp 0.5s 0.18s ease both;
     }
 
-    /* ── Room code display ───────────────────────────────────────────────── */
-    .room-code-label {
-      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
-      color: var(--gold-dim); margin-bottom: 8px;
-    }
+    /* ── Room code ───────────────────────────────────────────────────────── */
     .room-code {
       font-family: 'Cinzel Decorative', serif;
-      font-size: clamp(3rem, 6vw, 4.8rem); font-weight: 700;
+      font-size: clamp(2.4rem, 4.5vw, 3.8rem); font-weight: 700;
       letter-spacing: 10px; color: var(--white);
-      text-shadow: 0 0 40px rgba(201,168,76,0.55), 0 0 80px rgba(201,168,76,0.2), 0 3px 6px rgba(0,0,0,0.9);
+      text-shadow: 0 0 40px rgba(201,168,76,0.55), 0 3px 6px rgba(0,0,0,0.9);
       line-height: 1; margin-bottom: 6px;
     }
     .room-code-rule {
       width: 60px; height: 1px;
       background: linear-gradient(90deg, var(--gold), transparent);
-      margin-bottom: 28px;
+      margin-bottom: 20px;
     }
 
     /* ── Player list ─────────────────────────────────────────────────────── */
@@ -94,124 +81,192 @@
       font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
       color: var(--gold-dim); margin-bottom: 10px;
     }
-    .player-list {
-      display: flex; flex-direction: column; gap: 5px; margin-bottom: 28px;
-    }
+    .player-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
     .player-slot {
-      display: flex; align-items: center; gap: 12px;
-      padding: 7px 12px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 10px;
       border: 1px solid rgba(201,168,76,0.1);
       background: rgba(201,168,76,0.03);
       transition: border-color 0.3s, background 0.3s;
     }
-    .player-slot.filled {
-      border-color: rgba(201,168,76,0.3);
-      background: rgba(201,168,76,0.06);
-    }
+    .player-slot.filled { border-color: rgba(201,168,76,0.3); background: rgba(201,168,76,0.06); }
+    .player-slot.ready  { border-color: rgba(93,232,93,0.4);  background: rgba(93,232,93,0.05); }
     .player-dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: rgba(201,168,76,0.18); flex-shrink: 0;
       transition: background 0.3s, box-shadow 0.3s;
     }
-    .player-slot.filled .player-dot {
-      background: var(--gold);
-      box-shadow: 0 0 8px rgba(201,168,76,0.6);
-    }
+    .player-slot.filled .player-dot { background: var(--gold); box-shadow: 0 0 8px rgba(201,168,76,0.6); }
+    .player-slot.ready  .player-dot { background: rgba(93,232,93,0.9); box-shadow: 0 0 8px rgba(93,232,93,0.6); }
     .player-name-text {
-      font-family: 'Cinzel', serif; font-size: 0.7rem;
+      font-family: 'Cinzel', serif; font-size: 0.65rem;
       letter-spacing: 2px; text-transform: uppercase;
-      color: var(--white-faint); transition: color 0.3s; flex: 1;
+      color: var(--white-faint); flex: 1; transition: color 0.3s;
     }
     .player-slot.filled .player-name-text { color: var(--white-dim); }
-    .player-color-badge {
-      font-size: 0.5rem; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--gold-dim); opacity: 0; transition: opacity 0.4s;
+    .player-char-tag {
+      font-size: 0.48rem; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--gold-dim); opacity: 0; transition: opacity 0.3s;
+      text-align: right; max-width: 90px;
     }
-    .player-slot.filled .player-color-badge { opacity: 1; }
+    .player-slot.filled .player-char-tag { opacity: 1; }
+    .ready-badge {
+      font-size: 0.44rem; letter-spacing: 2px; text-transform: uppercase;
+      color: rgba(93,232,93,0.7); flex-shrink: 0;
+    }
 
-    /* ── Error message ───────────────────────────────────────────────────── */
+    /* ── Side picker (Hero / Villain) ────────────────────────────────────── */
+    .char-picker { display: flex; gap: 10px; margin-bottom: 16px; }
+    .char-btn {
+      font-family: 'Cinzel', serif; font-size: 0.65rem;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.25);
+      color: var(--white-faint); padding: 10px 18px;
+      cursor: pointer; transition: all 0.18s; flex: 1;
+    }
+    .char-btn:hover { border-color: var(--gold); color: var(--white); }
+    .char-btn.selected {
+      border-color: var(--gold); background: rgba(201,168,76,0.15);
+      color: var(--gold-light); box-shadow: 0 0 10px rgba(201,168,76,0.2);
+    }
+    .char-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Error / action ──────────────────────────────────────────────────── */
     .error-msg {
       font-family: 'Cinzel', serif; font-size: 0.62rem;
       letter-spacing: 2px; text-transform: uppercase;
       color: #e87070; margin-bottom: 10px; min-height: 1.2em;
       text-shadow: 0 0 10px rgba(232,112,112,0.4);
     }
-
-    /* ── Action rows ─────────────────────────────────────────────────────── */
-    .action-row {
-      display: flex; gap: 20px; align-items: center; margin-top: 4px;
-    }
+    .action-row { display: flex; gap: 14px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
     .action-row .menu-btn { width: auto; padding: 10px 4px; }
-
     .start-hint {
-      font-size: 0.58rem; letter-spacing: 3px; text-transform: uppercase;
+      font-size: 0.55rem; letter-spacing: 3px; text-transform: uppercase;
       color: var(--white-faint); margin-left: auto;
     }
     .start-hint span { color: var(--gold-dim); }
 
-    /* ── Right panel ─────────────────────────────────────────────────────── */
-    .lobby-right {
-      position: relative; z-index: 1; flex: 1;
-      display: flex; flex-direction: column;
-      align-items: flex-end; justify-content: flex-end;
-      padding: 32px 48px; gap: 12px;
-    }
-    .waiting-text {
-      font-size: 0.62rem; letter-spacing: 5px; text-transform: uppercase;
-      color: var(--white-faint);
-      animation: pulse 3s ease-in-out infinite;
-    }
-    .player-count { display: flex; align-items: baseline; gap: 8px; }
-    .player-count-num {
-      font-family: 'Cinzel Decorative', serif; font-size: 2.8rem;
-      color: var(--gold-light); text-shadow: 0 0 30px rgba(201,168,76,0.5); line-height: 1;
-    }
-    .player-count-label {
-      font-size: 0.65rem; letter-spacing: 4px; text-transform: uppercase;
-      color: var(--white-faint);
+    /* ── Connection status ───────────────────────────────────────────────── */
+    .conn-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
     }
     .connection-status {
-      font-size: 0.55rem; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--white-faint);
+      font-size: 0.52rem; letter-spacing: 3px; text-transform: uppercase; color: var(--white-faint);
     }
     .connection-status.connected { color: rgba(93,232,93,0.7); }
     .connection-status.error     { color: rgba(232,112,112,0.7); }
 
-    /* ── Character picker ────────────────────────────────────────────────── */
-    .char-label {
-      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
-      color: var(--gold-dim); margin-bottom: 8px;
-    }
-    .char-picker { display: flex; gap: 10px; margin-bottom: 18px; }
-    .char-btn {
-      font-family: 'Cinzel', serif; font-size: 0.65rem;
-      letter-spacing: 2px; text-transform: uppercase;
-      background: rgba(201,168,76,0.06);
-      border: 1px solid rgba(201,168,76,0.25);
-      color: var(--white-faint); padding: 10px 18px;
-      cursor: pointer; transition: all 0.18s; flex: 1;
-    }
-    .char-btn:hover { border-color: var(--gold); color: var(--white); }
-    .char-btn.selected {
-      border-color: var(--gold);
-      background: rgba(201,168,76,0.15);
-      color: var(--gold-light);
-      box-shadow: 0 0 10px rgba(201,168,76,0.2);
+    /* ── RIGHT PANEL — character picker ──────────────────────────────────── */
+    .lobby-right {
+      flex: 1; display: flex; flex-direction: column;
+      padding: 20px 28px; gap: 0; overflow: hidden;
+      position: relative;
     }
 
-    /* ── Ready state on player slots ─────────────────────────────────────── */
-    .player-slot.ready {
-      border-color: rgba(93,232,93,0.4);
-      background: rgba(93,232,93,0.05);
+    /* placeholder shown before side is chosen */
+    .right-placeholder {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      opacity: 0.3;
     }
-    .player-slot.ready .player-dot {
-      background: rgba(93,232,93,0.9);
-      box-shadow: 0 0 8px rgba(93,232,93,0.6);
+    .right-placeholder-icon { font-size: 3rem; }
+    .right-placeholder-text {
+      font-family: 'Cinzel', serif; font-size: 0.65rem;
+      letter-spacing: 4px; text-transform: uppercase; color: var(--white-faint);
     }
-    .ready-badge {
-      font-size: 0.48rem; letter-spacing: 2px; text-transform: uppercase;
-      color: rgba(93,232,93,0.7); margin-left: auto; flex-shrink: 0;
+
+    /* class panel shown after side chosen */
+    .class-panel { display: none; flex-direction: column; flex: 1; gap: 0; overflow: hidden; }
+    .class-panel.visible { display: flex; }
+
+    /* class type tab bar */
+    .class-tabs {
+      display: flex; gap: 6px; margin-bottom: 14px;
+      border-bottom: 1px solid rgba(201,168,76,0.15);
+      padding-bottom: 10px; flex-shrink: 0;
     }
+    .class-tab {
+      font-family: 'Cinzel', serif; font-size: 0.6rem;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: none; border: 1px solid rgba(201,168,76,0.2);
+      color: var(--white-faint); padding: 7px 14px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .class-tab:hover { border-color: var(--gold); color: var(--white); }
+    .class-tab.active {
+      border-color: var(--gold); background: rgba(201,168,76,0.12);
+      color: var(--gold-light);
+    }
+
+    /* character grid */
+    .char-grid-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .char-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px; overflow-y: auto; flex: 1;
+    }
+    .char-cell {
+      position: relative; aspect-ratio: 1;
+      border: 1px solid rgba(201,168,76,0.14);
+      background: rgba(201,168,76,0.03);
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; overflow: hidden;
+      transition: border-color 0.12s, background 0.12s, transform 0.12s;
+    }
+    .char-cell::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    }
+    .char-cell:hover { border-color: rgba(201,168,76,0.5); background: rgba(201,168,76,0.08); transform: scale(1.06); z-index: 3; }
+    .char-cell.selected {
+      border: 2px solid var(--gold); background: rgba(201,168,76,0.12);
+      box-shadow: 0 0 0 1px rgba(201,168,76,0.3), 0 0 16px rgba(201,168,76,0.4), inset 0 0 12px rgba(201,168,76,0.08);
+      transform: scale(1.08); z-index: 4;
+    }
+    .char-cell.selected::before { background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.6; }
+    .char-cell.locked { opacity: 0.25; cursor: not-allowed; }
+    .cell-emoji { font-size: clamp(1rem, 1.8vw, 1.6rem); line-height: 1; pointer-events: none; }
+    .cell-label {
+      font-family: 'Cinzel', serif; font-size: clamp(0.24rem, 0.45vw, 0.42rem);
+      letter-spacing: 1px; text-transform: uppercase; color: var(--white-faint);
+      margin-top: 2px; text-align: center; pointer-events: none; line-height: 1.1;
+    }
+    .char-cell.selected .cell-label { color: var(--gold-dim); }
+
+    /* selected character readout under grid */
+    .selected-readout {
+      flex-shrink: 0; margin-top: 10px;
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 14px;
+      border: 1px solid rgba(201,168,76,0.2);
+      background: rgba(201,168,76,0.04);
+      min-height: 52px;
+    }
+    .readout-name {
+      font-family: 'Cinzel', serif; font-size: 0.72rem;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--gold-light);
+    }
+    .readout-cls {
+      font-size: 0.52rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--white-faint);
+    }
+    .readout-stats { display: flex; gap: 10px; margin-left: auto; }
+    .stat-pill {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .stat-pill-label { font-size: 0.38rem; letter-spacing: 2px; color: var(--gold-dim); }
+    .stat-pill-bar { width: 28px; height: 3px; background: rgba(255,255,255,0.08); }
+    .stat-pill-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold-light)); }
+
+    /* locked-in state */
+    .locked-in-banner {
+      display: none; align-items: center; justify-content: center;
+      padding: 10px; margin-bottom: 10px;
+      background: rgba(93,232,93,0.08); border: 1px solid rgba(93,232,93,0.3);
+      font-family: 'Cinzel', serif; font-size: 0.65rem;
+      letter-spacing: 3px; text-transform: uppercase; color: rgba(93,232,93,0.9);
+    }
+    .locked-in-banner.visible { display: flex; }
 
     @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
   </style>
@@ -220,164 +275,464 @@
 
   <canvas id="bg-canvas"></canvas>
 
-  <div class="lobby-left">
+  <div class="page-wrap">
 
-    <!-- ── SCREEN 1: Enter username + choose host or join ─────────────── -->
-    <div class="screen active" id="screen-entry">
-      <p class="section-label">— Oh Troubled One,</p>
-      <h2 class="join-url">Enter Your Name</h2>
-      <p class="join-sub">Identify yourself, adventurer</p>
+    <!-- ══════════════════ LEFT PANEL ══════════════════ -->
+    <div class="lobby-left">
 
-      <input class="rpg-input" id="username-input" type="text"
-             maxlength="16" placeholder="Your name…"
-             onkeydown="if(event.key==='Enter') proceedFromEntry()" />
-
-      <div class="error-msg" id="entry-error"></div>
-
-      <div class="action-row">
-        <button class="menu-btn secondary" onclick="goBack()">← Back</button>
-        <button class="menu-btn" onclick="proceedFromEntry()">Continue →</button>
-      </div>
-    </div>
-
-    <!-- ── SCREEN 2: Host or Join choice ──────────────────────────────── -->
-    <div class="screen" id="screen-choice">
-      <p class="section-label" id="choice-greeting">— Welcome, <span></span></p>
-      <h1 class="join-url">Choose your path</h1>
-      <p class="join-sub" style="margin-bottom:32px">Host a new session or join one</p>
-
-      <div class="action-row" style="flex-direction:column; align-items:flex-start; gap:12px">
-        <button class="menu-btn" onclick="hostGame()">⚔ Host New Game</button>
-        <button class="menu-btn secondary" onclick="showJoinScreen()">✦ Join Existing Game</button>
-      </div>
-    </div>
-
-    <!-- ── SCREEN 3: Join — enter server IP + room code ───────────────── -->
-    <div class="screen" id="screen-join">
-      <p class="section-label">— Join a session</p>
-      <h1 class="join-url">Enter details</h1>
-      <p class="join-sub">Get these from the host</p>
-
-      <label class="section-label" style="margin-bottom:4px">Server address</label>
-      <input class="rpg-input" id="server-ip-input" type="text"
-             placeholder="192.168.1.x  or  localhost"
-             value="localhost" />
-
-      <label class="section-label" style="margin-bottom:4px">Room code</label>
-      <input class="rpg-input" id="room-code-input" type="text"
-             maxlength="4" placeholder="e.g. KRVN"
-             style="text-transform:uppercase; font-size:1.6rem; letter-spacing:8px"
-             oninput="this.value=this.value.toUpperCase()"
-             onkeydown="if(event.key==='Enter') joinGame()" />
-
-      <div class="error-msg" id="join-error"></div>
-
-      <div class="action-row">
-        <button class="menu-btn secondary" onclick="showScreen('screen-choice')">← Back</button>
-        <button class="menu-btn" onclick="joinGame()">Join →</button>
-      </div>
-    </div>
-
-    <!-- ── SCREEN 4: Lobby — waiting room ─────────────────────────────── -->
-    <div class="screen" id="screen-lobby">
-      <p class="section-label">— Room code</p>
-      <div class="room-code" id="room-code-display">····</div>
-      <div class="room-code-rule"></div>
-
-      <p class="char-label">— Choose your side</p>
-      <div class="char-picker" id="char-picker">
-        <button class="char-btn" onclick="selectCharacter('Hero')">⚔ Hero</button>
-        <button class="char-btn" onclick="selectCharacter('Villain')">💀 Villain</button>
+      <!-- SCREEN 1: Enter username -->
+      <div class="screen active" id="screen-entry">
+        <p class="section-label">— Oh Troubled One,</p>
+        <h2 class="join-url">Enter Your Name</h2>
+        <p class="join-sub">Identify yourself, adventurer</p>
+        <input class="rpg-input" id="username-input" type="text" maxlength="16"
+               placeholder="Your name…"
+               onkeydown="if(event.key==='Enter') proceedFromEntry()" />
+        <div class="error-msg" id="entry-error"></div>
+        <div class="action-row">
+          <button class="menu-btn secondary" onclick="goBack()">← Back</button>
+          <button class="menu-btn" onclick="proceedFromEntry()">Continue →</button>
+        </div>
       </div>
 
-      <p class="players-label">— Adventurers</p>
-      <div class="player-list" id="player-list"></div>
-
-      <div class="error-msg" id="lobby-error"></div>
-
-      <div class="action-row">
-        <button class="menu-btn secondary" onclick="leaveLobby()">← Leave</button>
-        <button class="menu-btn" id="ready-btn" onclick="toggleReady()">Ready Up ✓</button>
-        <button class="menu-btn" id="start-btn" onclick="startGame()" style="display:none">Force Start →</button>
-        <span class="start-hint" id="start-hint">Choose your side…</span>
+      <!-- SCREEN 2: Host or Join -->
+      <div class="screen" id="screen-choice">
+        <p class="section-label" id="choice-greeting">— Welcome, <span></span></p>
+        <h1 class="join-url">Choose your path</h1>
+        <p class="join-sub" style="margin-bottom:32px">Host a new session or join one</p>
+        <div class="action-row" style="flex-direction:column; align-items:flex-start; gap:12px">
+          <button class="menu-btn" onclick="hostGame()">⚔ Host New Game</button>
+          <button class="menu-btn secondary" onclick="showJoinScreen()">✦ Join Existing Game</button>
+        </div>
       </div>
-    </div>
 
-  </div>
+      <!-- SCREEN 3: Join — enter code -->
+      <div class="screen" id="screen-join">
+        <p class="section-label">— Join a session</p>
+        <h1 class="join-url">Enter details</h1>
+        <p class="join-sub">Get these from the host</p>
+        <label class="section-label" style="margin-bottom:4px">Server address</label>
+        <input class="rpg-input" id="server-ip-input" type="text"
+               placeholder="192.168.1.x  or  localhost" value="localhost" />
+        <label class="section-label" style="margin-bottom:4px">Room code</label>
+        <input class="rpg-input" id="room-code-input" type="text" maxlength="4"
+               placeholder="e.g. KRVN"
+               style="text-transform:uppercase; font-size:1.4rem; letter-spacing:8px"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter') joinGame()" />
+        <div class="error-msg" id="join-error"></div>
+        <div class="action-row">
+          <button class="menu-btn secondary" onclick="showScreen('screen-choice')">← Back</button>
+          <button class="menu-btn" onclick="joinGame()">Join →</button>
+        </div>
+      </div>
 
-  <!-- ── Right panel ────────────────────────────────────────────────── -->
-  <div class="lobby-right">
-    <div class="player-count">
-      <span class="player-count-num" id="count-num">0</span>
-      <span class="player-count-label">/ 4 Players</span>
-    </div>
-    <p class="waiting-text" id="waiting-text">Awaiting adventurers…</p>
-    <p class="connection-status" id="conn-status">Connecting…</p>
-  </div>
+      <!-- SCREEN 4: Lobby -->
+      <div class="screen" id="screen-lobby">
+        <div class="conn-row">
+          <p class="connection-status" id="conn-status">Connecting…</p>
+        </div>
+
+        <p class="section-label">— Room code</p>
+        <div class="room-code" id="room-code-display">····</div>
+        <div class="room-code-rule"></div>
+
+        <p class="section-label">— Choose your side</p>
+        <div class="char-picker" id="char-picker">
+          <button class="char-btn" id="btn-hero"    onclick="selectSide('Hero')">⚔ Hero</button>
+          <button class="char-btn" id="btn-villain" onclick="selectSide('Villain')">💀 Villain</button>
+        </div>
+
+        <p class="players-label">— Adventurers</p>
+        <div class="player-list" id="player-list"></div>
+
+        <div class="error-msg" id="lobby-error"></div>
+
+        <div class="action-row">
+          <button class="menu-btn secondary" onclick="leaveLobby()">← Leave</button>
+          <button class="menu-btn" id="ready-btn" onclick="toggleReady()" disabled>Ready Up ✓</button>
+          <button class="menu-btn" id="start-btn" onclick="startGame()" style="display:none">Start →</button>
+          <span class="start-hint" id="start-hint">Pick a side first…</span>
+        </div>
+      </div>
+
+    </div><!-- /lobby-left -->
+
+    <!-- ══════════════════ RIGHT PANEL ══════════════════ -->
+    <div class="lobby-right" id="lobby-right">
+
+      <!-- shown before side chosen -->
+      <div class="right-placeholder" id="right-placeholder">
+        <div class="right-placeholder-icon">⚔</div>
+        <div class="right-placeholder-text">Choose a side to see available champions</div>
+      </div>
+
+      <!-- shown after side chosen -->
+      <div class="class-panel" id="class-panel">
+
+        <div class="locked-in-banner" id="locked-in-banner">
+          ✓ &nbsp; Locked in — waiting for others
+        </div>
+
+        <!-- class type tab bar — populated by JS -->
+        <div class="class-tabs" id="class-tabs"></div>
+
+        <!-- character grid -->
+        <div class="char-grid-wrap">
+          <div class="char-grid" id="char-grid"></div>
+        </div>
+
+        <!-- selected character readout -->
+        <div class="selected-readout" id="selected-readout">
+          <div>
+            <div class="readout-name" id="readout-name">Select a champion</div>
+            <div class="readout-cls"  id="readout-cls">—</div>
+          </div>
+          <div class="readout-stats" id="readout-stats"></div>
+        </div>
+
+      </div>
+
+    </div><!-- /lobby-right -->
+
+  </div><!-- /page-wrap -->
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
 
-    // ── State ─────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // STATE
+    // ══════════════════════════════════════════════════════════════════════
     let clientId      = null;
     let ws            = null;
     let username      = '';
     let currentGameId = null;
     let isHost        = false;
     let serverIP      = 'localhost';
-    let myCharacter   = null;
+
+    let mySide        = null;   // 'Hero' | 'Villain'
+    let myClass       = null;   // e.g. 'Tank', 'DPS', 'Brute' …
+    let myCharacter   = null;   // full character object from CSV pool
     let myReady       = false;
 
     const MAX_PLAYERS = 4;
     const MIN_START   = 2;
 
-    // ── Screen navigation ─────────────────────────────────────────────────
-    function showScreen(id) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      document.getElementById(id).classList.add('active');
+    // ── CSV pools — populated after fetch ────────────────────────────────
+    // pools['Hero']['Tank'] = [ {name, cls, emoji, str, dex, mag, def, spd, pow}, … ]
+    const pools = { Hero: {}, Villain: {} };
+
+    const HERO_CLASSES    = ['Tank', 'DPS', 'Support', 'Mage'];
+    const VILLAIN_CLASSES = ['Brute', 'Agile', 'Mage'];
+
+    const HERO_ROLES = [
+      { cls: 'Tank',    test: c => c.def >= 70 && c.spd <= 50 },
+      { cls: 'DPS',     test: c => c.str >= 80 && c.def <= 60 },
+      { cls: 'Support', test: c => c.pow >= 70 && c.str <= 20 && c.def <= 20 },
+      { cls: 'Mage',    test: c => c.mag >= 80 && c.def <= 40 },
+    ];
+    const VILLAIN_ROLES = [
+      { cls: 'Mage',  test: c => c.mag >= 80 && c.def <= 40 },
+      { cls: 'Agile', test: c => c.spd >= 70 && c.def <= 50 },
+      { cls: 'Brute', test: c => c.def >= 70 && c.spd <= 50 },
+    ];
+
+    // current tab open in right panel
+    let activeClassTab = null;
+    // index of selected cell in current tab's pool
+    let selectedCellIdx = null;
+
+    // ══════════════════════════════════════════════════════════════════════
+    // CSV LOADING
+    // ══════════════════════════════════════════════════════════════════════
+    function csvToJson(str) {
+      const rows    = str.split('\n');
+      const headers = rows[0].split(',').map(h => h.trim());
+      const result  = [];
+      for (let i = 1; i < rows.length; i++) {
+        if (!rows[i].trim()) continue;
+        const vals = rows[i].split(',');
+        const obj  = {};
+        headers.forEach((h, j) => obj[h] = vals[j]?.trim() ?? '');
+        result.push(obj);
+      }
+      return result;
     }
 
-    // ── SCREEN 1: validate username, then connect WS ──────────────────────
-    function proceedFromEntry() {
-      const val = document.getElementById('username-input').value.trim();
-      if (!val) { document.getElementById('entry-error').textContent = 'A name is required, adventurer.'; return; }
-      username = val;
-      document.getElementById('entry-error').textContent = '';
-
-      // Update greeting
-      document.querySelector('#choice-greeting span').textContent = username;
-
-      showScreen('screen-choice');
+    function classifyChar(c, roles) {
+      // most restrictive first (Support/Schemer have 3 conditions)
+      const ordered = [...roles].sort((a, b) => {
+        const countConditions = fn => fn.toString().split('&&').length;
+        return countConditions(b.test) - countConditions(a.test);
+      });
+      for (const role of ordered) {
+        if (role.test(c)) return role.cls;
+      }
+      return null;
     }
 
-    function showJoinScreen() { showScreen('screen-join'); }
+    fetch('../data.csv')
+      .then(r => r.text())
+      .then(content => {
+        const raw = csvToJson(content);
 
-    // ── Connect WebSocket to a given IP ───────────────────────────────────
+        // init pool buckets
+        HERO_CLASSES.forEach(c => pools.Hero[c] = []);
+        VILLAIN_CLASSES.forEach(c => pools.Villain[c] = []);
+
+        raw.forEach(obj => {
+          const isVillain = obj.isVillain?.trim() === 'True';
+          const side      = isVillain ? 'Villain' : 'Hero';
+          const roles     = isVillain ? VILLAIN_ROLES : HERO_ROLES;
+          const emoji     = isVillain ? '💀' : '⚔️';
+
+          const str = +obj.Strength     || 0;
+          const def = +obj.Defense      || 0;
+          const mag = +obj.Magic        || 0;
+          const spd = +obj.Speed        || 0;
+          const pow = +obj.Power        || 0;
+          const dex = +obj.Intelligence || 0;
+
+          const cls = classifyChar({ str, def, mag, spd, pow }, roles);
+          if (!cls) return;
+
+          pools[side][cls].push({ name: obj.Name, cls, emoji, str, dex, mag, def, spd, pow });
+        });
+
+        console.log('Pools ready:', {
+          Hero:    Object.fromEntries(Object.entries(pools.Hero).map(([k,v])=>[k,v.length])),
+          Villain: Object.fromEntries(Object.entries(pools.Villain).map(([k,v])=>[k,v.length])),
+        });
+      })
+      .catch(err => console.error('CSV load failed:', err));
+
+    // ══════════════════════════════════════════════════════════════════════
+    // RIGHT PANEL — class tabs + grid
+    // ══════════════════════════════════════════════════════════════════════
+    function showClassPanel(side) {
+      document.getElementById('right-placeholder').style.display = 'none';
+      const panel = document.getElementById('class-panel');
+      panel.classList.add('visible');
+
+      const classes = side === 'Villain' ? VILLAIN_CLASSES : HERO_CLASSES;
+
+      // build tab bar
+      const tabBar = document.getElementById('class-tabs');
+      tabBar.innerHTML = '';
+      classes.forEach(cls => {
+        const tab = document.createElement('button');
+        tab.className   = 'class-tab';
+        tab.textContent = cls;
+        tab.onclick     = () => switchClassTab(cls);
+        tabBar.appendChild(tab);
+      });
+
+      // open first tab
+      switchClassTab(classes[0]);
+    }
+
+    function switchClassTab(cls) {
+      activeClassTab  = cls;
+      selectedCellIdx = null;
+
+      // update tab highlight
+      document.querySelectorAll('.class-tab').forEach(t => {
+        t.classList.toggle('active', t.textContent === cls);
+      });
+
+      // build grid for this class
+      buildCharGrid(cls);
+    }
+
+    function buildCharGrid(cls) {
+      const grid = document.getElementById('char-grid');
+      grid.innerHTML = '';
+
+      const list = (pools[mySide]?.[cls] || []).slice(0, 50);
+
+      // pad to multiples of 10
+      const padded = [...list];
+      while (padded.length % 10 !== 0) padded.push(null);
+
+      padded.forEach((c, i) => {
+        const cell = document.createElement('div');
+        cell.className    = c ? 'char-cell' : 'char-cell locked';
+        cell.dataset.idx  = i;
+        cell.innerHTML    = `
+          <span class="cell-emoji">${c ? c.emoji : '🔒'}</span>
+          <span class="cell-label">${c ? c.name : '???'}</span>
+        `;
+        if (c && !myReady) {
+          cell.addEventListener('click',      () => selectChar(i, cls));
+          cell.addEventListener('mouseenter', () => previewChar(c));
+        }
+        grid.appendChild(cell);
+      });
+
+      // clear readout
+      setReadout(null);
+    }
+
+    function selectChar(idx, cls) {
+      if (myReady) return; // locked in — can't change
+
+      // deselect previous
+      document.querySelectorAll('.char-cell.selected').forEach(c => c.classList.remove('selected'));
+      document.querySelector(`[data-idx="${idx}"]`)?.classList.add('selected');
+      selectedCellIdx = idx;
+
+      const c = (pools[mySide]?.[cls] || [])[idx];
+      if (!c) return;
+
+      myClass     = cls;
+      myCharacter = c;
+
+      setReadout(c);
+
+      // enable ready button
+      const btn = document.getElementById('ready-btn');
+      btn.disabled = false;
+      document.getElementById('start-hint').innerHTML = `<span>${c.name}</span> — ready up to lock in`;
+    }
+
+    function previewChar(c) {
+      if (!myCharacter) setReadout(c); // only preview if nothing locked
+    }
+
+    function setReadout(c) {
+      document.getElementById('readout-name').textContent = c ? c.name : 'Select a champion';
+      document.getElementById('readout-cls').textContent  = c ? c.cls  : '—';
+
+      const statsEl = document.getElementById('readout-stats');
+      if (!c) { statsEl.innerHTML = ''; return; }
+
+      const stats = [
+        { label: 'STR', val: c.str },
+        { label: 'MAG', val: c.mag },
+        { label: 'DEF', val: c.def },
+        { label: 'SPD', val: c.spd },
+        { label: 'POW', val: c.pow },
+      ];
+      statsEl.innerHTML = stats.map(s => `
+        <div class="stat-pill">
+          <span class="stat-pill-label">${s.label}</span>
+          <div class="stat-pill-bar">
+            <div class="stat-pill-fill" style="width:${s.val}%"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function lockInPanel() {
+      // disable all cells and side buttons once ready
+      document.querySelectorAll('.char-cell').forEach(c => {
+        c.style.pointerEvents = 'none';
+        c.style.opacity = c.classList.contains('selected') ? '1' : '0.25';
+      });
+      document.querySelectorAll('.class-tab').forEach(t => t.disabled = true);
+      document.getElementById('locked-in-banner').classList.add('visible');
+    }
+
+    function unlockPanel() {
+      document.querySelectorAll('.char-cell').forEach(c => {
+        c.style.pointerEvents = '';
+        c.style.opacity = '';
+      });
+      document.querySelectorAll('.class-tab').forEach(t => t.disabled = false);
+      document.getElementById('locked-in-banner').classList.remove('visible');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // SIDE SELECTION
+    // ══════════════════════════════════════════════════════════════════════
+    function selectSide(side) {
+      if (myReady) return; // locked in
+      mySide      = side;
+      myClass     = null;
+      myCharacter = null;
+      selectedCellIdx = null;
+
+      document.getElementById('btn-hero').classList.toggle('selected',    side === 'Hero');
+      document.getElementById('btn-villain').classList.toggle('selected', side === 'Villain');
+
+      document.getElementById('ready-btn').disabled = true;
+      document.getElementById('start-hint').innerHTML = 'Pick a champion…';
+
+      showClassPanel(side);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // READY / UNREADY
+    // ══════════════════════════════════════════════════════════════════════
+    function toggleReady() {
+      if (!myCharacter) {
+        showError('lobby-error', 'Select a champion before readying up.');
+        return;
+      }
+      clearErrors();
+      myReady = !myReady;
+
+      const btn = document.getElementById('ready-btn');
+      btn.textContent = myReady ? 'Unready ✗' : 'Ready Up ✓';
+      btn.style.opacity = myReady ? '0.6' : '1';
+
+      // lock or unlock character panel
+      if (myReady) {
+        lockInPanel();
+        document.getElementById('btn-hero').disabled    = true;
+        document.getElementById('btn-villain').disabled = true;
+      } else {
+        unlockPanel();
+        document.getElementById('btn-hero').disabled    = false;
+        document.getElementById('btn-villain').disabled = false;
+      }
+
+      // map our class names to game.js class names (lowercase)
+      const CLASS_MAP = {
+        // hero
+        'Tank':    'tank',
+        'DPS':     'dps',
+        'Support': 'support',
+        // villain
+        'Brute':   'brute',
+        'Agile':   'agile',
+        // shared key — disambiguate by side
+        'Mage':    mySide === 'Villain' ? 'villain_mage' : 'mage',
+      };
+
+      sendWS({
+        method:    'ready',
+        gameId:    currentGameId,
+        character: {
+          name:    myCharacter.name,
+          cls:     CLASS_MAP[myClass] || myClass.toLowerCase(),
+          clsDisplay: myClass,
+          role:    mySide.toLowerCase(),
+          str:     myCharacter.str,
+          mag:     myCharacter.mag,
+          def:     myCharacter.def,
+          spd:     myCharacter.spd,
+          pow:     myCharacter.pow,
+        },
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // WEBSOCKET
+    // ══════════════════════════════════════════════════════════════════════
     function connectWS(ip, onReady) {
       if (ws) { ws.close(); ws = null; }
       serverIP = ip || 'localhost';
-      const url = `ws://${serverIP}:9090`;
-
       setStatus('Connecting…', '');
-      ws = new WebSocket(url);
+      ws = new WebSocket(`ws://${serverIP}:9090`);
 
-      ws.onopen = () => {
-        setStatus('Connected', 'connected');
-      };
-
-      ws.onmessage = e => {
-        const msg = JSON.parse(e.data);
-        handleMessage(msg, onReady);
-      };
-
+      ws.onopen  = () => setStatus('Connected', 'connected');
       ws.onerror = () => {
         setStatus('Connection failed', 'error');
-        showError('join-error', `Cannot reach server at ${serverIP}:9090 — check the address.`);
+        showError('join-error', `Cannot reach ${serverIP}:9090`);
       };
-
-      ws.onclose = () => {
-        setStatus('Disconnected', 'error');
-      };
+      ws.onclose = () => setStatus('Disconnected', 'error');
+      ws.onmessage = e => handleMessage(JSON.parse(e.data), onReady);
     }
 
     function handleMessage(msg, onReady) {
@@ -385,7 +740,7 @@
 
         case 'connect':
           clientId = msg.clientId;
-          sessionStorage.setItem('clientId', msg.clientId);
+          sessionStorage.setItem('clientId', clientId);
           setStatus('Connected', 'connected');
           if (onReady) onReady();
           break;
@@ -403,31 +758,15 @@
           showScreen('screen-lobby');
           break;
 
-        case 'update':
-          if (msg.game) renderLobby(msg.game);
-          break;
-
-        case 'start':
-          sessionStorage.setItem('lobbyUsername',  username);
-          sessionStorage.setItem('lobbyCharacter', myCharacter || 'Hero');
-          sessionStorage.setItem('lobbyGameId',    currentGameId);
-          sessionStorage.setItem('lobbyWsHost',    serverIP || 'localhost');
-          sessionStorage.setItem('characterSide',  myCharacter || 'Hero');
-          sessionStorage.setItem('gameId',         currentGameId);
-          sessionStorage.setItem('clientId',       clientId);        // add — re-save in case page refreshed
-          sessionStorage.setItem('lobbyPlayers',   JSON.stringify(msg.game.players)); // add this
-          window.location.href = 'characterSelection.html';
-          break;
-
         case 'ready':
           if (msg.game) {
             renderLobby(msg.game);
-            // Re-sync our own ready state from the server's truth
+            // re-sync own ready state
             const me = msg.game.players.find(p => p.username === username);
-            if (me !== undefined) {
+            if (me) {
               myReady = me.ready;
               const btn = document.getElementById('ready-btn');
-              btn.textContent = myReady ? 'Unready ✗' : 'Ready Up ✓';
+              btn.textContent   = myReady ? 'Unready ✗' : 'Ready Up ✓';
               btn.style.opacity = myReady ? '0.6' : '1';
             }
           }
@@ -437,186 +776,167 @@
           if (msg.game) renderLobby(msg.game);
           break;
 
+        case 'start':
+          // ── SYNC GATE: server says go, everyone navigates together ──
+          sessionStorage.setItem('clientId',           clientId);
+          sessionStorage.setItem('gameId',             currentGameId);
+          sessionStorage.setItem('lobbyWsHost',        serverIP);
+          sessionStorage.setItem('lobbyPlayers',       JSON.stringify(msg.game.players));
+          sessionStorage.setItem('selectedCharacter',  myCharacter?.name  || '');
+          sessionStorage.setItem('selectedClass',      (() => {
+            const MAP = {
+              'Tank':'tank','DPS':'dps','Support':'support','Mage':'mage',
+              'Brute':'brute','Destroyer':'agile','Schemer':'villain_mage','Sorcerer':'villain_mage',
+            };
+            return MAP[myClass] || (myClass || '').toLowerCase();
+          })());
+          sessionStorage.setItem('selectedRole',       mySide?.toLowerCase() || 'hero');
+          sessionStorage.setItem('characterSide',      mySide || 'Hero');
+          window.location.href = '../index.html';
+          break;
+
         case 'error':
-          // Surface errors on whichever screen is active
-          showError('join-error', msg.message);
+          showError('join-error',  msg.message);
           showError('lobby-error', msg.message);
           break;
       }
     }
 
-    // ── Character selection ───────────────────────────────────────────────
-    function selectCharacter(name) {
-      myCharacter = name;
-      document.querySelectorAll('.char-btn').forEach(b => {
-        b.classList.toggle('selected', b.textContent.includes(name));
-      });
-      document.getElementById('start-hint').innerHTML = `<span>${name}</span> — click Ready Up`;
-      clearErrors();
+    function sendWS(payload) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
     }
 
-    // ── Ready up / unready ────────────────────────────────────────────────
-    function toggleReady() {
-      if (!myCharacter) {
-        showError('lobby-error', 'Choose Hero or Villain before readying up.');
-        return;
+    // ══════════════════════════════════════════════════════════════════════
+    // LOBBY RENDER
+    // ══════════════════════════════════════════════════════════════════════
+    function renderLobby(game) {
+      const players = game.players || [];
+      const list    = document.getElementById('player-list');
+      list.innerHTML = '';
+
+      for (let i = 0; i < MAX_PLAYERS; i++) {
+        const p    = players[i];
+        const slot = document.createElement('div');
+        slot.className = 'player-slot' + (p ? ' filled' : '') + (p?.ready ? ' ready' : '');
+        const charTag = p?.character
+          ? `${p.character.clsDisplay || p.character.cls || ''} · ${p.character.role || ''}`
+          : '';
+        slot.innerHTML = `
+          <div class="player-dot"></div>
+          <span class="player-name-text">${p ? p.username : 'Awaiting…'}</span>
+          ${p ? `<span class="player-char-tag">${charTag}</span>` : ''}
+          ${p?.ready ? `<span class="ready-badge">✓</span>` : ''}
+        `;
+        list.appendChild(slot);
       }
-      clearErrors();
-      myReady = !myReady;
-      const btn = document.getElementById('ready-btn');
-      btn.textContent = myReady ? 'Unready ✗' : 'Ready Up ✓';
-      btn.style.opacity = myReady ? '0.6' : '1';
-      sendWS({ method: 'ready', gameId: currentGameId, character: myCharacter });
+
+      document.getElementById('count-num') && (document.getElementById('count-num').textContent = players.length);
+
+      // update start button text
+      if (isHost) {
+        const startBtn  = document.getElementById('start-btn');
+        const allReady  = players.length >= MIN_START && players.every(p => p.ready);
+        startBtn.textContent = allReady ? 'Start →' : 'Force Start →';
+      }
+
+      const readyCount = players.filter(p => p.ready).length;
+      const hint       = document.getElementById('start-hint');
+      if (myCharacter && !myReady) {
+        hint.innerHTML = `<span>${myCharacter.name}</span> — ready up to lock in`;
+      } else if (myReady) {
+        hint.innerHTML = `<span>${readyCount}/${players.length}</span> ready`;
+      }
     }
 
-    // ── Host a new game ───────────────────────────────────────────────────
-    function hostGame() {
-      isHost = true;
-      myCharacter = null;
-      myReady = false;
-      serverIP = 'localhost';
-      clearErrors();
-      buildEmptySlots();
-      showScreen('screen-lobby');
-      setStatus('Connecting…', '');
+    // ══════════════════════════════════════════════════════════════════════
+    // NAVIGATION
+    // ══════════════════════════════════════════════════════════════════════
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
 
+    function proceedFromEntry() {
+      const val = document.getElementById('username-input').value.trim();
+      if (!val) { document.getElementById('entry-error').textContent = 'A name is required, adventurer.'; return; }
+      username = val;
+      document.getElementById('entry-error').textContent = '';
+      document.querySelector('#choice-greeting span').textContent = username;
+      showScreen('screen-choice');
+    }
+
+    function showJoinScreen() { showScreen('screen-join'); }
+
+    function hostGame() {
+      isHost = true; mySide = null; myCharacter = null; myReady = false;
+      clearErrors(); buildEmptySlots(); showScreen('screen-lobby');
+      setStatus('Connecting…', '');
       connectWS('localhost', () => {
         sendWS({ method: 'create', clientId, username });
         document.getElementById('start-btn').style.display = 'inline';
       });
     }
 
-    // ── Join an existing game ─────────────────────────────────────────────
     function joinGame() {
       const ip   = document.getElementById('server-ip-input').value.trim() || 'localhost';
       const code = document.getElementById('room-code-input').value.trim().toUpperCase();
       clearErrors();
-
-      if (!code || code.length !== 4) {
-        showError('join-error', 'Enter the 4-letter room code.');
-        return;
-      }
-
-      isHost = false;
-      myCharacter = null;
-      myReady = false;
+      if (!code || code.length !== 4) { showError('join-error', 'Enter the 4-letter room code.'); return; }
+      isHost = false; mySide = null; myCharacter = null; myReady = false;
       buildEmptySlots();
-
-      connectWS(ip, () => {
-        sendWS({ method: 'join', clientId, username, gameId: code });
-      });
+      connectWS(ip, () => sendWS({ method: 'join', clientId, username, gameId: code }));
     }
 
-    // ── Start the game (host only) ────────────────────────────────────────
     function startGame() {
       const count = document.querySelectorAll('.player-slot.filled').length;
-      if (count < MIN_START) {
-        showError('lobby-error', `Need at least ${MIN_START} adventurers.`);
-        return;
-      }
+      if (count < MIN_START) { showError('lobby-error', `Need at least ${MIN_START} adventurers.`); return; }
       sendWS({ method: 'start', clientId, gameId: currentGameId });
     }
 
     function leaveLobby() {
       if (ws) ws.close();
+      // reset right panel
+      document.getElementById('right-placeholder').style.display = '';
+      document.getElementById('class-panel').classList.remove('visible');
       showScreen('screen-choice');
     }
 
-    // ── Render lobby player list ──────────────────────────────────────────
     function buildEmptySlots() {
       const list = document.getElementById('player-list');
       list.innerHTML = '';
       for (let i = 0; i < MAX_PLAYERS; i++) {
         const slot = document.createElement('div');
         slot.className = 'player-slot';
-        slot.id = `slot-${i}`;
-        slot.innerHTML = `
-          <div class="player-dot"></div>
-          <span class="player-name-text">Awaiting…</span>
-          <span class="player-color-badge"></span>
-        `;
+        slot.innerHTML = `<div class="player-dot"></div><span class="player-name-text">Awaiting…</span>`;
         list.appendChild(slot);
       }
-      updateCount(0);
     }
 
-    function renderLobby(game) {
-      const players = game.players || [];
-      const list = document.getElementById('player-list');
-
-      list.innerHTML = '';
-      for (let i = 0; i < MAX_PLAYERS; i++) {
-        const p = players[i];
-        const slot = document.createElement('div');
-        slot.className = 'player-slot' + (p ? ' filled' : '') + (p?.ready ? ' ready' : '');
-        slot.innerHTML = `
-          <div class="player-dot"></div>
-          <span class="player-name-text">${p ? p.username : 'Awaiting…'}</span>
-          ${p ? `<span class="ready-badge">${p.ready ? '✓ Ready' : '…'}</span>` : ''}
-        `;
-        list.appendChild(slot);
-      }
-
-      updateCount(players.length);
-
-      const readyCount = players.filter(p => p.ready).length;
-      const needed     = Math.max(0, MIN_START - players.length);
-      const hint       = document.getElementById('start-hint');
-
-      if (needed > 0) {
-        hint.innerHTML = `Waiting for <span>${needed}</span> more`;
-      } else if (myReady) {
-        hint.innerHTML = `<span>${readyCount}/${players.length}</span> ready`;
-      }
-
-      // update start button text based on ready state
-      if (isHost) {
-        const startBtn  = document.getElementById('start-btn');
-        const allReady  = players.length >= MIN_START && players.every(p => p.ready);
-        startBtn.textContent = allReady ? 'Start →' : 'Force Start →';
-      }
-    }
-
-    function updateCount(n) {
-      document.getElementById('count-num').textContent = n;
-    }
-
-    // ── WS helper ─────────────────────────────────────────────────────────
-    function sendWS(payload) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(payload));
-      }
-    }
-
-    // ── UI helpers ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // UI HELPERS
+    // ══════════════════════════════════════════════════════════════════════
     function setStatus(text, cls) {
       const el = document.getElementById('conn-status');
-      el.textContent = text;
-      el.className = 'connection-status ' + cls;
+      if (el) { el.textContent = text; el.className = 'connection-status ' + cls; }
     }
-
-    function showError(id, msg) {
-      const el = document.getElementById(id);
-      if (el) el.textContent = msg;
-    }
-
+    function showError(id, msg) { const el = document.getElementById(id); if (el) el.textContent = msg; }
     function clearErrors() {
       ['entry-error','join-error','lobby-error'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = '';
+        const el = document.getElementById(id); if (el) el.textContent = '';
       });
     }
+    function goBack() { window.location.href = 'mode-select.html'; }
 
-    function goBack()   { window.location.href = 'mode-select.html'; }
-
-    // ── Three.js wireframe crown background ───────────────────────────────
-    const canvas = document.getElementById('bg-canvas');
+    // ══════════════════════════════════════════════════════════════════════
+    // THREE.JS BACKGROUND (crown — unchanged from original)
+    // ══════════════════════════════════════════════════════════════════════
+    const canvas   = document.getElementById('bg-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
-    camera.position.set(0, 0, 14);
+    const bgScene  = new THREE.Scene();
+    const bgCamera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
+    bgCamera.position.set(0, 0, 14);
 
     const wireBright = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.18 });
     const wireMid    = new THREE.MeshBasicMaterial({ color: 0xd4b86a, wireframe: true, transparent: true, opacity: 0.10 });
@@ -637,33 +957,33 @@
     const baseRing = new THREE.Mesh(new THREE.TorusGeometry(1.85, 0.07, 5, 32), wireBright);
     baseRing.rotation.x = Math.PI*0.5; baseRing.position.y = -0.3;
     crownGroup.add(baseRing);
-    crownGroup.position.set(4.5, 0.5, -2.5);
-    scene.add(crownGroup);
+    crownGroup.position.set(0, 0.5, -8); // centered behind both panels
+    bgScene.add(crownGroup);
 
     const floaters = [];
     for (let i = 0; i < 7; i++) {
-      const geo = new THREE.PlaneGeometry(3+Math.random()*6, 2+Math.random()*5, Math.floor(3+Math.random()*5), Math.floor(3+Math.random()*5));
+      const geo  = new THREE.PlaneGeometry(3+Math.random()*6, 2+Math.random()*5, Math.floor(3+Math.random()*5), Math.floor(3+Math.random()*5));
       const mesh = new THREE.Mesh(geo, wireFaint);
       mesh.position.set((Math.random()-0.5)*26,(Math.random()-0.5)*16,-9-Math.random()*12);
       mesh.rotation.set((Math.random()-0.5)*1.5,(Math.random()-0.5)*1.5,Math.random()*Math.PI);
-      mesh.userData.axis = new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
+      mesh.userData.axis  = new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
       mesh.userData.speed = 0.0005+Math.random()*0.001;
-      scene.add(mesh); floaters.push(mesh);
+      bgScene.add(mesh); floaters.push(mesh);
     }
 
     let t = 0;
-    function animate() {
-      requestAnimationFrame(animate); t += 0.007;
-      crownGroup.rotation.y = t*0.18;
-      crownGroup.position.y = 0.5+Math.sin(t*0.5)*0.3;
+    function animateBg() {
+      requestAnimationFrame(animateBg); t += 0.007;
+      crownGroup.rotation.y  = t * 0.18;
+      crownGroup.position.y  = 0.5 + Math.sin(t * 0.5) * 0.3;
       for (const f of floaters) f.rotateOnAxis(f.userData.axis, f.userData.speed);
-      renderer.render(scene, camera);
+      renderer.render(bgScene, bgCamera);
     }
-    animate();
+    animateBg();
 
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
+      bgCamera.aspect = window.innerWidth / window.innerHeight;
+      bgCamera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 

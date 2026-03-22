@@ -19,7 +19,12 @@ const SEND_RATE = 50; // 20 times per second
 
 ws.onopen = () => {
   console.log('WS connected');
-  ws.send(JSON.stringify({ method: 'identify', clientId: MY_ID }));
+  ws.send(JSON.stringify({
+    method:   'identify',
+    clientId: MY_ID,
+    gameId:   sessionStorage.getItem('gameId'),
+    username: sessionStorage.getItem('lobbyUsername'),
+  }));
 };
 
 ws.onmessage = (e) => {
@@ -45,6 +50,19 @@ ws.onmessage = (e) => {
     // ── A player left mid-game ────────────────────────────────────────
     case 'playerLeft':
       handleRemoteLeave(msg);
+      break;
+
+    case 'gameState':
+      msg.players.forEach(p => {
+        const id = `remote-${p.clientId}`;
+        if (!spawnedRemotePlayers.has(id)) {
+          spawnRemotePlayer(id, {
+            clientId: p.clientId,
+            position: { x: (Math.random()-0.5)*10, y: 1, z: (Math.random()-0.5)*10 },
+            rotation: { y: 0 },
+          });
+        }
+      });
       break;
   }
 };
