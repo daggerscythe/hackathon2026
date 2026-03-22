@@ -692,15 +692,15 @@ function startRoundTimer() {
 
     const mins = Math.floor(timeLeft / 60);
     const secs = timeLeft % 60;
-    timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const timerEl = document.getElementById('round-timer');
+    if (!timerEl) return;
 
-    // turn red in last 30 seconds
+    timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
     timerEl.style.color = timeLeft <= 30 ? '#e74c3c' : 'white';
 
     if (timeLeft <= 0) {
       clearInterval(interval);
       timerEl.textContent = '0:00';
-      // time's up — villain loses if heroes still alive
       if (typeof endMatch === 'function' && getState() === STATES.BATTLE) {
         endMatch('hero');
       }

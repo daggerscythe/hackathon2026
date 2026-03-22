@@ -11,12 +11,13 @@
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.4/dist/aframe-physics-system.min.js"></script>
 
   <script src="game/game.js"></script>
+  <script src="game/healthbar.js"></script>
   <script src="game/physics.js"></script>
   <script src="game/network.js"></script>
   <script src="game/spectator.js"></script>
+  <script src="game/audio.js"></script>
   <script src="UI/menu.js"></script>
   <script src="game/ui.js"></script>
-  <script src="game/audio.js"></script>
   <style>
     /* Health bar styles — float above canvas */
     .health-bar-container {
@@ -66,106 +67,6 @@
       dps:          'model-dps',
       tank:         'model-tank',
     };
-    // ============================================
-    // BILLBOARD HEALTH BAR COMPONENT
-    // Projects a world position to screen space
-    // and places an HTML health bar there
-    // ============================================
-    AFRAME.registerComponent('health-bar', {
-      schema: {
-        nickname: { type: 'string', default: 'Player' },
-        health:   { type: 'number', default: 100 },
-        maxHealth:{ type: 'number', default: 100 },
-      },
-
-      init() {
-        // create the HTML overlay element
-        this.container = document.createElement('div');
-        this.container.className = 'health-bar-container';
-        this.container.innerHTML = `
-          <div class="player-nickname">${this.data.nickname}</div>
-          <div class="health-bar-bg">
-            <div class="health-bar-fill" style="width:100%"></div>
-          </div>
-        `;
-        document.body.appendChild(this.container);
-
-        this.fill     = this.container.querySelector('.health-bar-fill');
-        this.nameEl   = this.container.querySelector('.player-nickname');
-        this.camera   = null;
-        this.renderer = null;
-
-        // listen for health changes from game.js
-        const id = this.el.dataset.characterId || this.el.getAttribute('id');
-        this.characterId = id;
-        this.onHealthChanged = (e) => {
-            if (e.detail.characterId !== this.characterId) return;
-            this.updateHealth(e.detail.health, e.detail.maxHealth);
-        };
-
-        this.onDefeated = (e) => {
-          if (e.detail.characterId !== this.characterId) return;
-          this.container.style.display = 'none';
-        };
-        document.addEventListener('game:healthChanged',      this.onHealthChanged);
-        document.addEventListener('game:characterDefeated',  this.onDefeated);
-
-      },
-
-      // call this from game.js when health changes
-      updateHealth(health, maxHealth) {
-        const pct = Math.max(0, (health / maxHealth) * 100);
-        this.fill.style.width = `${pct}%`;
-
-        // color shifts green → yellow → red
-        if (pct > 60)      this.fill.style.background = '#2ecc71';
-        else if (pct > 30) this.fill.style.background = '#f39c12';
-        else               this.fill.style.background = '#e74c3c';
-      },
-
-      tick() {
-        // lazy-grab camera and renderer once scene is ready
-        if (!this.camera) {
-          const camEl = document.getElementById('main-camera');
-          if (!camEl || !camEl.object3D) return;
-          this.camera   = camEl.object3D;
-          this.renderer = this.el.sceneEl.renderer;
-        }
-
-        // world position — place bar above the entity's head
-        const worldPos = new THREE.Vector3();
-        this.el.object3D.getWorldPosition(worldPos);
-        worldPos.y += 2.4; // float above head
-
-        // project to screen space
-        const canvas   = this.renderer.domElement;
-        const projected = worldPos.clone().project(
-          this.el.sceneEl.camera
-        );
-
-        const x = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
-        const y = (1 - (projected.y * 0.5 + 0.5)) * canvas.clientHeight;
-
-        // hide if behind camera
-        if (projected.z > 1) {
-          this.container.style.display = 'none';
-          return;
-        }
-
-        this.container.style.display = 'flex';
-        this.container.style.left    = `${x}px`;
-        this.container.style.top     = `${y}px`;
-      },
-
-      remove() {
-        document.removeEventListener('game:healthChanged',     this.onHealthChanged);
-        document.removeEventListener('game:characterDefeated', this.onDefeated);
-        if (this.container && this.container.parentNode) {
-            this.container.parentNode.removeChild(this.container);
-        }
-      },
-    });
-
 
     // ============================================
     // INITIALIZE LOBBY
@@ -231,6 +132,10 @@
           `characterId: ${localCharId}; duration: 300`);
         localPlayerEl.dataset.characterId = localCharId;
       }
+      setTimeout(() => {
+        const attackComp = localPlayerEl.components['attack-input'];
+        if (attackComp) attackComp.spawnPermanentWeapon();
+      }, 200);
       
       const villainId = myRole === 'villain' ? 'villain' : null;
       const heroIds   = [...characters.keys()].filter(id => {
@@ -285,7 +190,8 @@
       <a-asset-item id="model-hero-mage"    src="assets/models/hero_mage.glb"></a-asset-item>
       <a-asset-item id="model-support"      src="assets/models/support.glb"></a-asset-item>
       <a-asset-item id="model-dps"          src="assets/models/dps.glb"></a-asset-item>
-      <a-asset-item id="model-tank"         src="assets/models/tank.glb"></a-asset-item><a-asset-item id="sword"    src="assets/models/sword.glb"></a-asset-item>
+      <a-asset-item id="model-tank"         src="assets/models/tank.glb"></a-asset-item>
+      <a-asset-item id="sword"    src="assets/models/sword.glb"></a-asset-item>
       <a-asset-item id="fireball" src="assets/models/fireball.glb"></a-asset-item>
       <a-asset-item id="arena" src="assets/models/arena.glb"></a-asset-item>
     </a-assets>

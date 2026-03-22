@@ -6,18 +6,15 @@ AFRAME.registerComponent('player-physics', {
 
     init() {
         this.keys = {};
-        this.canJump = false; // only jump when on the ground
+        this.canJump = false;
         this.jumping = false;
         this.speed = 5;
         this.jumpForce = 12;
 
-        // track keys
         this.onKeyDown = (e) => {
             this.keys[e.code] = true;
-
-            // jump on Space
             if (e.code === 'Space' && this.canJump) {
-            this.jump();
+                this.jump();
             }
         };
         this.onKeyUp = (e) => { this.keys[e.code] = false; };
@@ -25,7 +22,6 @@ AFRAME.registerComponent('player-physics', {
         window.addEventListener('keydown', this.onKeyDown);
         window.addEventListener('keyup',   this.onKeyUp);
 
-        // when player hits something check if its below the player
         this.el.addEventListener('collide', (e) => {
             this.onCollide(e);
         });
@@ -34,23 +30,15 @@ AFRAME.registerComponent('player-physics', {
     jump() {
         const body = this.el.components['dynamic-body'].body;
         if (!body) return;
-
-        // apply an upward impulse at the players center
         body.velocity.set(0, this.jumpForce, 0);
         this.canJump = false;
         this.jumping = true;
-
-        console.log('jumped!');
     },
 
     onCollide(e) {
-        // check if what player hits is below by comparing contact normal
         const contact = e.detail.contact;
         if (!contact) return;
-
-        const normal = contact.ni; // collision normal vector
-
-        // if the normal is pointing mostly upward, player on top something
+        const normal = contact.ni;
         if (normal.y > 0.5) {
             this.canJump = true;
             this.jumping = false;
@@ -58,11 +46,14 @@ AFRAME.registerComponent('player-physics', {
     },
 
     tick(time, delta) {
+        if (typeof isSpectating !== 'undefined' && isSpectating) return;
+
         const bodyComponent = this.el.components['dynamic-body'];
         if (!bodyComponent || !bodyComponent.body) return;
         const body = bodyComponent.body;
 
         const cam = document.getElementById('main-camera');
+        if (!cam) return;
         const worldQuat = new THREE.Quaternion();
         cam.object3D.getWorldQuaternion(worldQuat);
         const euler = new THREE.Euler();
@@ -88,10 +79,17 @@ AFRAME.registerComponent('player-physics', {
 
         body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
 
-        // rotate villain model to face camera direction — NOT the physics entity
+        // rotate villain model to face camera direction
         const modelEl = document.getElementById('villain-model');
         if (modelEl) modelEl.object3D.rotation.y = euler.y + Math.PI;
-        },
+
+        // rotate sword with same yaw + optional pitch
+        const weaponEl = document.getElementById('local-weapon');
+        if (weaponEl) {
+          weaponEl.object3D.rotation.y = euler.y;
+          weaponEl.object3D.rotation.x = euler.x;
+        }
+    },
 
     remove() {
         window.removeEventListener('keydown', this.onKeyDown);
@@ -114,18 +112,10 @@ AFRAME.registerComponent('melee-hitbox', {
     this.hitTimer = null;
   },
 
-  /**
-   * Call this to spawn the hitbox.
-   * The box is visible via physics debug wireframe.
-   */
   spawn() {
-    if (this.active) return; // prevent spam
+    if (this.active) return;
     this.active = true;
-
-    // check for hits while active
     this.checkHits();
-
-    // despawn after duration
     this.hitTimer = setTimeout(() => this.despawn(), this.data.duration);
   },
 
@@ -135,9 +125,8 @@ AFRAME.registerComponent('melee-hitbox', {
 
     const myPos = this.el.object3D.position;
 
-    // check all registered characters
     characters.forEach(target => {
-      if (target.role === attacker.role) return; // skip teammates
+      if (target.role === attacker.role) return;
       if (!target.isAlive)               return;
 
       const targetEl = document.getElementById(target.entityId);
@@ -148,11 +137,9 @@ AFRAME.registerComponent('melee-hitbox', {
 
       if (dist <= MELEE_RANGE) {
         const damage = calcDamage(attacker, target, 'strength');
-        applyHit(this.data.characterId, target.id, 'strength'); // apply once
-        // Tell Colyseus server about this hit (server re-validates + broadcasts)
+        applyHit(this.data.characterId, target.id, 'strength');
         if (typeof sendAttackEvent === 'function') sendAttackEvent('melee', target.id, damage);
       }
-      console.log('[HIT] target.id:', target.id, '| target.entityId:', target.entityId);
     });
   },
 
@@ -172,22 +159,20 @@ AFRAME.registerComponent('melee-hitbox', {
 
 // ============================================
 // ATTACK INPUT COMPONENT
-// Attach to the local player entity
-// Left click = melee (sword) or magic (fireball) depending on class
 // ============================================
 AFRAME.registerComponent('attack-input', {
 
   schema: {
     characterId: { type: 'string', default: 'villain' },
-    attackClass:  { type: 'string', default: 'brute' }, // determines sword vs magic
+    attackClass:  { type: 'string', default: 'brute' },
   },
 
   init() {
-    // classes that use magic — matches CLASS_ATTACK_TYPE in game.js
     this.magicClasses = ['mage', 'villain_mage'];
 
     this.onMouseDown = (e) => {
-      if (e.button !== 0) return; // left click only
+      if (e.button !== 0) return;
+      if (typeof isSpectating !== 'undefined' && isSpectating) return;
       if (getState() !== STATES.BATTLE) return;
 
       const isMagic = this.magicClasses.includes(this.data.attackClass);
@@ -197,9 +182,7 @@ AFRAME.registerComponent('attack-input', {
         this.doMelee();
       }
     };
-    
-    // prevent right click context menu
-        // H = heal nearest ally, relay via Colyseus
+
     this.onHealKey = (e) => {
       if (e.code !== 'KeyH') return;
       if (typeof getState === 'function' && getState() !== STATES.BATTLE) return;
@@ -209,7 +192,8 @@ AFRAME.registerComponent('attack-input', {
       let nearestId = charId, nearestDist = Infinity;
       characters.forEach(c => {
         if (c.role !== 'hero' || !c.isAlive) return;
-        const el = document.getElementById(c.entityId); if (!el) return;
+        const el = document.getElementById(c.entityId);
+        if (!el) return;
         const d = this.el.object3D.position.distanceTo(el.object3D.position);
         if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
       });
@@ -220,22 +204,38 @@ AFRAME.registerComponent('attack-input', {
     window.addEventListener('mousedown',   this.onMouseDown);
     window.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('keydown',     this.onHealKey);
+
+    // spawn permanent weapon after entity loads
+    // this.el.addEventListener('loaded', () => {
+    //   this.spawnPermanentWeapon();
+    // });
   },
 
-  // ---- MELEE ----
+  spawnPermanentWeapon() {
+    const magicClasses = ['mage', 'villain_mage'];
+    const isMagic = magicClasses.includes(this.data.attackClass);
+
+    if (isMagic) return;
+
+    console.log('[WEAPON] spawning sword | attackClass:', this.data.attackClass);
+
+    const weapon = document.createElement('a-gltf-model');
+    weapon.setAttribute('id',       'local-weapon');
+    weapon.setAttribute('src',      '#sword');
+    weapon.setAttribute('scale',    '0.08 0.08 0.08');
+    weapon.setAttribute('position', '0 0.2 0.5');
+    weapon.setAttribute('rotation', '0 0 -45');
+
+    this.el.appendChild(weapon);
+  },
+
   doMelee() {
     const char = characters.get(this.data.characterId);
     if (!char || !char.isAlive) return;
-
-    // show sword sprite
-    this.showWeapon('sword', '0.5 0.5 0.5', 300);
-
-    // spawn visible hitbox and check hits
     const hitboxComp = this.el.components['melee-hitbox'];
     if (hitboxComp) hitboxComp.spawn();
   },
 
-  // ---- MAGIC ----
   doMagic() {
     const char = characters.get(this.data.characterId);
     if (!char || !char.isAlive) return;
@@ -248,69 +248,20 @@ AFRAME.registerComponent('attack-input', {
     const fired = performMagic(this.data.characterId, direction);
     if (!fired) return;
 
-    this.showWeapon('fireball', '0.3 0.3 0.3', 400);
-
-    // tell other clients to spawn the projectile/VFX
     if (typeof sendAbilityCast === 'function') {
       sendAbilityCast('magic', { direction });
     }
   },
 
-  /**
-   * Spawns a flat sprite in front of the player temporarily.
-   * @param {string} src       - image path
-   * @param {number} w         - width
-   * @param {number} h         - height
-   * @param {number} zOffset   - how far in front of player
-   * @param {number} yOffset   - height offset
-   * @param {number} duration  - ms before disappearing
-   */
-
-
-  showWeapon(assetId, scale, duration) {
-    // get player world position and facing direction
-    const playerPos = new THREE.Vector3();
-    this.el.object3D.getWorldPosition(playerPos);
-
-    const worldQuat = new THREE.Quaternion();
-    this.el.object3D.getWorldQuaternion(worldQuat);
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
-
-    // place weapon 1 unit in front, at chest height
-    const spawnPos = new THREE.Vector3(
-        playerPos.x + forward.x * 1.0,
-        playerPos.y + 1.0,
-        playerPos.z + forward.z * 1.0,
-    );
-
-    const weapon = document.createElement('a-gltf-model');
-    weapon.setAttribute('src',      `#${assetId}`);
-    weapon.setAttribute('scale',    scale);
-    weapon.setAttribute('position', `${spawnPos.x} ${spawnPos.y} ${spawnPos.z}`);
-    weapon.setAttribute('rotation', `0 ${THREE.MathUtils.radToDeg(worldQuat.y * 2)} 0`);
-
-    // append to SCENE not player
-    const scene = document.querySelector('a-scene');
-    scene.appendChild(weapon);
-
-    setTimeout(() => {
-        if (weapon.parentNode) weapon.parentNode.removeChild(weapon);
-    }, duration);
-    },
-
-  /**
-   * Finds nearest living enemy within MELEE_RANGE.
-   * Reuses the same logic pattern as player-physics.
-   */
   getNearestEnemy() {
     const char = characters.get(this.data.characterId);
     if (!char) return null;
 
     let nearest     = null;
-    let nearestDist = MELEE_RANGE; // only hit if within range
+    let nearestDist = MELEE_RANGE;
 
     characters.forEach(c => {
-      if (c.role === char.role) return; // skip same team
+      if (c.role === char.role) return;
       if (!c.isAlive)           return;
 
       const targetEl = document.getElementById(c.entityId);
@@ -333,5 +284,5 @@ AFRAME.registerComponent('attack-input', {
     window.removeEventListener('mousedown',   this.onMouseDown);
     window.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('keydown',     this.onHealKey);
-},
+  },
 });

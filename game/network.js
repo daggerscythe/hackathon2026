@@ -81,20 +81,18 @@ ws.onmessage = (e) => {
       break;
 
     case 'matchOver':
+        console.log('[NETWORK] matchOver received, state:', getState(), 'winner:', msg.winner);
         if (getState() === STATES.BATTLE) {
             endMatch(msg.winner);
         } else {
-            // already dead/spectating — just show the screen directly
-            // force transition if needed
-            if (getState() !== STATES.GAME_OVER) {
-            transitionTo(STATES.GAME_OVER);
-            }
+            // already dead/spectating — emit directly to ui
             emit(GAME_EVENTS.MATCH_OVER, {
             winner:   msg.winner,
             duration: msg.duration ?? 0,
             });
         }
         break;
+
     case 'abilityCast':
       handleAbilityCast(msg);
       break;
@@ -175,6 +173,19 @@ function spawnRemotePlayer(id, msg) {
   model.setAttribute('scale', '0.8 0.8 0.8');
   entity.appendChild(model);
 
+  // only spawn permanent weapon for melee classes
+    // mages have no permanent weapon — fireball only appears when cast
+    const magicClasses = ['mage', 'villain_mage'];
+    const isMagic = magicClasses.includes(cls);
+    if (!isMagic) {
+        const weapon = document.createElement('a-gltf-model');
+        weapon.setAttribute('src',      '#sword');
+        weapon.setAttribute('scale',    '0.08 0.08 0.08');
+        weapon.setAttribute('position', '-0.2 0.2 -0.75');
+        weapon.setAttribute('rotation', '0 0 -45');
+        entity.appendChild(weapon);
+    }
+
   document.querySelector('a-scene').appendChild(entity);
 
   addCharacter(id, role, cls, {
@@ -207,14 +218,24 @@ AFRAME.registerComponent('network-lerp', {
 
       // rotate model child to match camera yaw — same pattern as physics.js
       const modelEl = el.querySelector('a-gltf-model');
-      if (modelEl) {
-        // add inside the modelEl block
+        if (modelEl) {
         modelEl.object3D.rotation.y = THREE.MathUtils.lerp(
-          modelEl.object3D.rotation.y,
-          target.rotation.y + Math.PI,
-          t
+            modelEl.object3D.rotation.y,
+            target.rotation.y + Math.PI,
+            t
         );
-      }
+        }
+
+        // rotate remote player's sword with same yaw
+        const children = el.querySelectorAll('a-gltf-model');
+        if (children.length > 1) {
+        // second child is the weapon (first is the character model)
+        children[1].object3D.rotation.y = THREE.MathUtils.lerp(
+            children[1].object3D.rotation.y,
+            target.rotation.y, // no Math.PI for weapon
+            t
+        );
+        }
     }
   }
 });
