@@ -88,8 +88,8 @@ AFRAME.registerComponent('player-physics', {
 
         body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
 
-        // rotate villain model to face camera direction — NOT the physics entity
-        const modelEl = document.getElementById('villain-model');
+        // rotate local model to face camera direction — NOT the physics entity
+        const modelEl = document.getElementById('local-model');
         if (modelEl) modelEl.object3D.rotation.y = euler.y;
         },
 
@@ -177,14 +177,13 @@ AFRAME.registerComponent('melee-hitbox', {
 
       if (dist <= MELEE_RANGE) {
         console.log(`Melee hit: ${attacker.name} → ${target.name}`);
-        applyHit(this.data.characterId, target.id, 'strength');
+        const isMultiplayer = typeof sendAttackEvent === 'function' && !!sessionStorage.getItem('gameId');
 
-        const damage = calcDamage(attacker, target, 'strength');
-        applyHit(this.data.characterId, target.id, 'strength');
-
-        // tell other clients about this hit
-        if (typeof sendAttackEvent === 'function') {
-            sendAttackEvent('melee', target.id, damage);
+        if (isMultiplayer) {
+          // server will compute damage + broadcast health updates
+          sendAttackEvent('melee', target.id);
+        } else {
+          applyHit(this.data.characterId, target.id, 'strength');
         }
       }
     });

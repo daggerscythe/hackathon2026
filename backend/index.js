@@ -60,6 +60,60 @@ const COLORS      = ["Red", "Green", "Blue", "Yellow"];
 const MAX_PLAYERS = 4;
 const MIN_START   = 2;
 
+const BASE_HEALTH = 100;
+const BASE_DAMAGE = 10;
+const MELEE_RANGE = 4;
+
+function clamp01(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+function normalizeCharacter(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const role = raw.role === 'villain' ? 'villain' : 'hero';
+  const cls  = String(raw.cls || '').trim() || (role === 'villain' ? 'brute' : 'tank');
+  const name = String(raw.name || '').trim() || 'Player';
+
+  // UI sends 0-100; game.js normalizes by /100. We'll normalize to 0-1 here.
+  const str = clamp01((raw.str ?? raw.strength ?? 70) / 100);
+  const mag = clamp01((raw.mag ?? raw.magic ?? 60) / 100);
+  const def = clamp01((raw.def ?? raw.defense ?? 30) / 100);
+  const spd = clamp01((raw.spd ?? raw.speed ?? 50) / 100);
+  const pow = clamp01((raw.pow ?? raw.power ?? 40) / 100);
+
+  return { role, cls, name, str, mag, def, spd, pow };
+}
+
+function spawnPosition(i, count) {
+  const radius = 10;
+  const angle = (i / Math.max(1, count)) * Math.PI * 2;
+  return { x: Math.cos(angle) * radius, y: 2, z: Math.sin(angle) * radius };
+}
+
+function ensureRuntime(game) {
+  if (game.runtime) return game.runtime;
+  game.runtime = { players: {} };
+  return game.runtime;
+}
+
+function publicState(game) {
+  const runtime = game.runtime;
+  if (!runtime) return [];
+
+  return Object.values(runtime.players).map(p => ({
+    clientId:  p.clientId,
+    username:  p.username,
+    character: p.character,
+    position:  p.position,
+    rotation:  p.rotation,
+    health:    p.health,
+    maxHealth: p.maxHealth,
+  }));
+}
+
 // ── Helper: send JSON to a single connection ──────────────────────────────
 function send(conn, payload) {
   try { conn.send(JSON.stringify(payload)); } catch {}
@@ -111,7 +165,10 @@ wsServer.on("request", request => {
       const before = game.players.length;
       game.players = game.players.filter(p => p.clientId !== connClientId);
       if (game.players.length !== before) {
-        broadcast(game, { method: "playerLeft", game: publicGame(game) });
+        if (game.runtime) {
+          delete game.runtime.players[connClientId];
+        }
+        broadcast(game, { method: "playerLeft", clientId: connClientId, game: publicGame(game) });
       }
     }
     delete clients[connClientId];
@@ -216,6 +273,25 @@ wsServer.on("request", request => {
         return;
       }
 
+      // Initialize authoritative runtime state (positions + HP + stats)
+      const runtime = ensureRuntime(game);
+      game.players.forEach((p, idx) => {
+        const character = normalizeCharacter(p.character) || {
+          role: 'hero', cls: 'tank', name: p.username || 'Player', str: 0.7, mag: 0.6, def: 0.3, spd: 0.5, pow: 0.4,
+        };
+
+        runtime.players[p.clientId] = {
+          clientId:  p.clientId,
+          username:  p.username,
+          character,
+          position:  spawnPosition(idx, game.players.length),
+          rotation:  { y: 0 },
+          health:    BASE_HEALTH,
+          maxHealth: BASE_HEALTH,
+          isAlive:   true,
+        };
+      });
+
       broadcast(game, { method: 'start', game: publicGame(game) });
     }
 
@@ -258,17 +334,22 @@ wsServer.on("request", request => {
 
           console.log(`Player ${existingId} re-identified in game ${gameId}`);
 
-          // tell this player about everyone else currently in the game
-          send(conn, {
-            method:  'gameState',
-            players: game.players
-              .filter(p => p.clientId !== existingId)
-              .map(p => ({
-                clientId:  p.clientId,
-                username:  p.username,
-                character: p.character,
-              })),
-          });
+          // If the match has started, send a full snapshot so the game page can spawn correctly.
+          if (game.runtime) {
+            send(conn, { method: 'state', gameId, players: publicState(game) });
+          } else {
+            // otherwise just tell this player who is in the lobby
+            send(conn, {
+              method:  'gameState',
+              players: game.players
+                .filter(p => p.clientId !== existingId)
+                .map(p => ({
+                  clientId:  p.clientId,
+                  username:  p.username,
+                  character: p.character,
+                })),
+            });
+          }
         }
       }
     }
@@ -277,6 +358,12 @@ wsServer.on("request", request => {
     if (method === 'playerMove') {
       const game = games[msg.gameId];
       if (!game) return;
+
+      if (game.runtime && game.runtime.players[connClientId]) {
+        const p = game.runtime.players[connClientId];
+        if (msg.position) p.position = msg.position;
+        if (msg.rotation) p.rotation = msg.rotation;
+      }
 
       const payload = {
         method:   'playerMove',
@@ -297,6 +384,52 @@ wsServer.on("request", request => {
     if (method === 'playerAttack') {
       const game = games[msg.gameId];
       if (!game) return;
+
+      if (game.runtime && game.runtime.players[connClientId]) {
+        const runtime = game.runtime;
+        const attacker = runtime.players[connClientId];
+        const targetId = msg.targetId;
+        const defender = runtime.players[targetId];
+
+        if (!defender || defender.health <= 0 || attacker.health <= 0) return;
+
+        const attackType = msg.attackType;
+
+        if (attackType === 'melee') {
+          const ap = attacker.position;
+          const dp = defender.position;
+          if (!ap || !dp) return;
+          const dx = ap.x - dp.x;
+          const dy = ap.y - dp.y;
+          const dz = ap.z - dp.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist > MELEE_RANGE) return;
+        }
+
+        const statMult = attackType === 'magic'
+          ? (attacker.character?.mag ?? 0.6)
+          : (attacker.character?.str ?? 0.7);
+
+        const defense = defender.character?.def ?? 0.3;
+        const rawDamage = BASE_DAMAGE * statMult;
+        const damageTaken = Math.max(0.1, rawDamage * (1 - defense));
+
+        defender.health = Math.max(0, defender.health - damageTaken);
+
+        broadcast(game, {
+          method:    'healthUpdate',
+          targetId,
+          health:    defender.health,
+          maxHealth: defender.maxHealth,
+        });
+
+        if (defender.health <= 0) {
+          defender.isAlive = false;
+          broadcast(game, { method: 'playerDied', characterId: targetId, clientId: connClientId });
+        }
+
+        return;
+      }
 
       game.players.forEach(p => {
         if (p.clientId === connClientId) return;

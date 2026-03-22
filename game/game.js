@@ -260,6 +260,13 @@ function calcDamage(attacker, defender, attackType) {
  */
 
 function applyHit(attackerId, defenderId, attackType) {
+  const isMultiplayer = typeof sendAttackEvent === 'function' && !!sessionStorage.getItem('gameId');
+  if (isMultiplayer) {
+    const type = attackType === 'magic' ? 'magic' : 'melee';
+    sendAttackEvent(type, defenderId);
+    return;
+  }
+
     const attacker = characters.get(attackerId);
     const defender = characters.get(defenderId);
 
@@ -292,6 +299,9 @@ function handleDeath(id) {
 
     emit(GAME_EVENTS.CHARACTER_DEFEATED, { characterId: id, role: char.role });
 
+    // In multiplayer, server owns HP/kill rewards.
+    if (!!sessionStorage.getItem('gameId')) return;
+
     // villain gets health for every killed player
     if (char.role === 'hero') {
         heroesAlive--;
@@ -319,6 +329,7 @@ function handleDeath(id) {
  * for self-heal, applyHeal('hero-2', 'hero-2')
  */
 function applyHeal(healerId, healeeId) {
+  if (!!sessionStorage.getItem('gameId')) return;
     const healer = characters.get(healerId);
     const healee = characters.get(healeeId);
     if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
@@ -844,7 +855,12 @@ AFRAME.registerComponent('projectile', {
 
       // 1.0 unit hit radius
       if (dist < 1.0) {
-        applyHit(this.data.attackerId, char.id, 'magic');
+        const isMultiplayer = typeof sendAttackEvent === 'function' && !!sessionStorage.getItem('gameId');
+        if (isMultiplayer) {
+          sendAttackEvent('magic', char.id);
+        } else {
+          applyHit(this.data.attackerId, char.id, 'magic');
+        }
         this.despawn();
       }
     });
