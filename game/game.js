@@ -379,19 +379,39 @@ function onCharacterDefeatedMatchCheck(event) {
 }
 
 function checkWin() {
-    if (!matchState || getState() !== STATES.BATTLE) return;
-    const villainDead = !isAlive(matchState.villainId);
-    const allHeroIds  = new Set([
-        ...matchState.heroIds,
-        ...[...characters.values()].filter(c => c.role === 'hero').map(c => c.id),
-    ]);
-    const HeroesDead = allHeroIds.size > 0 && [...allHeroIds].every(id => !isAlive(id));
+  if (!matchState || getState() !== STATES.BATTLE) return;
 
-    if (villainDead) {
-        endMatch('hero');
-    } else if (HeroesDead) {
-        endMatch('villain');
-    }
+  console.log('[WIN CHECK] matchState.villainId:', matchState.villainId);
+  console.log('[WIN CHECK] isAlive(villain):', isAlive(matchState.villainId));
+  console.log('[WIN CHECK] all characters:');
+  characters.forEach((c, id) => {
+    console.log(`  ${id} | role:${c.role} | alive:${c.isAlive}`);
+  });
+
+  const villainDead = !isAlive(matchState.villainId);
+
+  // dynamically count living heroes from characters map
+  // don't rely on matchState.heroIds snapshot which may be incomplete
+  let livingHeroes = 0;
+  let totalHeroes  = 0;
+  characters.forEach(c => {
+    if (c.role !== 'hero') return;
+    totalHeroes++;
+    if (c.isAlive) livingHeroes++;
+  });
+
+  console.log('[WIN CHECK] villain dead:', villainDead, '| living heroes:', livingHeroes, '/ total:', totalHeroes);
+
+  // don't check win if no heroes registered yet
+  if (totalHeroes === 0) return;
+
+  const allHeroesDead = livingHeroes === 0;
+
+  if (villainDead) {
+    endMatch('hero');
+  } else if (allHeroesDead) {
+    endMatch('villain');
+  }
 }
 
 /**
@@ -946,8 +966,10 @@ AFRAME.registerComponent('game-manager', {
     const char   = characters.get(characterId);
     if (!char)   return;
 
-    // don't hide local player entity — camera is inside it
-    if (characterId === 'villain') return;
+    // if (characterId === 'villain') return;
+    const localEl = document.getElementById('player-villain');
+    const localChar = [...characters.values()].find(c => c.entityId === 'player-villain');
+    if (localChar && characterId === localChar.id) return;
 
     const charEl = document.getElementById(char.entityId);
     if (!charEl) return;

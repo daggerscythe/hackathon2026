@@ -179,7 +179,6 @@
       const myName       = sessionStorage.getItem('selectedCharacter') || 'You';
 
       console.log('[LOBBY] My role:', myRole, '| My class:', myClass, '| My name:', myName, '| My clientId:', myClientId);
-      console.log('[LOBBY] Lobby players:', lobbyPlayers);
 
       // find my own spawn position from lobby data
       const myLobbyEntry = lobbyPlayers.find(p => p.clientId === myClientId);
@@ -212,8 +211,9 @@
       }
 
       // register local player
-      addCharacter('villain', myRole, myClass, {
-        name:     myName,
+      const localCharId = myRole === 'villain' ? 'villain' : MY_ID;
+      addCharacter(localCharId, myRole, myClass, {
+        name: myName,
         strength: 80, magic: 75, defense: 60, speed: 50, power: 20,
       }, 'player-villain');
 
@@ -225,11 +225,28 @@
         localModel.setAttribute('src', modelSrc);
       }
       if (localPlayerEl) {
-        localPlayerEl.setAttribute('attack-input', `characterId: villain; attackClass: ${myClass}`);
-        localPlayerEl.dataset.characterId = 'villain';
+        localPlayerEl.setAttribute('attack-input', 
+          `characterId: ${localCharId}; attackClass: ${myClass}`);
+        localPlayerEl.setAttribute('melee-hitbox',
+          `characterId: ${localCharId}; duration: 300`);
+        localPlayerEl.dataset.characterId = localCharId;
       }
+      
+      const villainId = myRole === 'villain' ? 'villain' : null;
+      const heroIds   = [...characters.keys()].filter(id => {
+        const c = characters.get(id);
+        return c && c.role === 'hero';
+      });
 
-      transitionTo(STATES.BATTLE);
+      // find actual villain id
+      const actualVillainId = [...characters.keys()].find(id => {
+        const c = characters.get(id);
+        return c && c.role === 'villain';
+      });
+
+      console.log('[LOBBY] Starting match — villain:', actualVillainId, '| heroes:', heroIds);
+      if (actualVillainId) initMatch(actualVillainId, heroIds);
+      else transitionTo(STATES.BATTLE);
     }
     // wait for scene to fully load before spawning// wait for scene to fully load before spawning
     document.addEventListener('DOMContentLoaded', () => {

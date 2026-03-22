@@ -264,5 +264,16 @@ wsServer.on('request', request => {
       if (!game) return;
       broadcast(game, { ...msg, clientId });
     }
+
+    if (msg.method === 'matchOver') {
+      const game = games[msg.gameId];
+      if (!game) return;
+      // relay to everyone except sender
+      game.players.forEach(p => {
+        if (p.clientId === clientId) return;
+        const c = clients[p.clientId];
+        if (c) send(c.connection, { ...msg });
+      });
+    }
   });
 });

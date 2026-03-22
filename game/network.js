@@ -11,6 +11,7 @@ const MY_CLASS = sessionStorage.getItem('selectedClass');
 const MY_ROLE  = sessionStorage.getItem('selectedRole');
 const MY_NAME  = sessionStorage.getItem('selectedCharacter');
 const LOBBY    = JSON.parse(sessionStorage.getItem('lobbyPlayers') || '[]');
+const LOCAL_CHAR_ID = MY_ROLE === 'villain' ? 'villain' : MY_ID; 
 
 // remote player entity ids we've already spawned
 const spawnedRemotePlayers = new Set();
@@ -78,6 +79,22 @@ ws.onmessage = (e) => {
         }
       });
       break;
+
+    case 'matchOver':
+        if (getState() === STATES.BATTLE) {
+            endMatch(msg.winner);
+        } else {
+            // already dead/spectating — just show the screen directly
+            // force transition if needed
+            if (getState() !== STATES.GAME_OVER) {
+            transitionTo(STATES.GAME_OVER);
+            }
+            emit(GAME_EVENTS.MATCH_OVER, {
+            winner:   msg.winner,
+            duration: msg.duration ?? 0,
+            });
+        }
+        break;
   }
 };
 
@@ -100,8 +117,6 @@ setInterval(() => {
   cam.object3D.getWorldQuaternion(worldQuat);
   const euler = new THREE.Euler();
   euler.setFromQuaternion(worldQuat, 'YXZ');
-
-  console.log('[ROT] Sending rotation y:', euler.y, 'for', MY_ID);
 
   ws.send(JSON.stringify({
     method:   'playerMove',
@@ -191,7 +206,6 @@ AFRAME.registerComponent('network-lerp', {
       const modelEl = el.querySelector('a-gltf-model');
       if (modelEl) {
         // add inside the modelEl block
-        console.log('[ROT] Lerping', id, 'model rotation to', target.rotation.y);
         modelEl.object3D.rotation.y = THREE.MathUtils.lerp(
           modelEl.object3D.rotation.y,
           target.rotation.y + Math.PI,
@@ -222,8 +236,10 @@ function sendAttackEvent(attackType, targetId, damage) {
 // RECEIVE ATTACK — apply damage locally
 // ============================================
 function handleRemoteAttack(msg) {
-  // if the target is us, our local character id is 'villain' not 'remote-xyz'
-  const targetId = (msg.targetId === `remote-${MY_ID}`) ? 'villain' : msg.targetId;
+  console.log('[ATTACK] received targetId:', msg.targetId, '| MY_ID:', MY_ID, '| LOCAL_CHAR_ID:', LOCAL_CHAR_ID);
+  const targetId = (msg.targetId === `remote-${MY_ID}` || msg.targetId === MY_ID)
+    ? LOCAL_CHAR_ID
+    : msg.targetId;
 
   const target = characters.get(targetId);
   if (!target || !target.isAlive) return;
@@ -267,6 +283,16 @@ document.addEventListener('game:characterDefeated', (e) => {
     method:      'playerDied',
     clientId:    MY_ID,
     gameId:      sessionStorage.getItem('gameId'),
-    characterId: 'villain',
+    characterId: LOCAL_CHAR_ID,
+  }));
+});
+
+document.addEventListener('game:matchOver', (e) => {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    method:  'matchOver',
+    gameId:  sessionStorage.getItem('gameId'),
+    winner:  e.detail.winner,
+    duration: e.detail.duration ?? 0,
   }));
 });

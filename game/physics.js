@@ -157,6 +157,7 @@ AFRAME.registerComponent('melee-hitbox', {
           sendAttackEvent('melee', target.id, damage);
         }
       }
+      console.log('[HIT] target.id:', target.id, '| target.entityId:', target.entityId);
     });
   },
 
