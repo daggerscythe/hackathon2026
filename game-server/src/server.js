@@ -3,20 +3,22 @@ import os from 'node:os';
 import { decode, encode, MsgType, Role } from '@hack/shared';
 
 /**
- * @typedef {{ id:string, name:string, role:string, ready:boolean, ws: import('ws').WebSocket }} Player
+ * @typedef {{ id:string, name:string, role:string, classId: string|null, confirmed: boolean, ready:boolean, ws: import('ws').WebSocket }} Player
  */
 
 function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `p_${Math.random().toString(16).slice(2)}`;
 }
 
-function assignRole(existingPlayers) {
-  const heroes = existingPlayers.filter((p) => p.role === Role.HERO).length;
-  const villains = existingPlayers.filter((p) => p.role === Role.VILLAIN).length;
+const HERO_CLASSES = /** @type {const} */ (['hero:tank', 'hero:dps', 'hero:support', 'hero:mage']);
+const VILLAIN_CLASSES = /** @type {const} */ (['villain:mage', 'villain:brute', 'villain:agile']);
 
-  if (heroes < 3) return Role.HERO;
-  if (villains < 1) return Role.VILLAIN;
-  return Role.SPECTATOR;
+function isAllowedClassId(classId) {
+  return HERO_CLASSES.includes(classId) || VILLAIN_CLASSES.includes(classId);
+}
+
+function classToRole(classId) {
+  return HERO_CLASSES.includes(classId) ? Role.HERO : Role.VILLAIN;
 }
 
 function getHostUrls(port) {
@@ -41,7 +43,7 @@ function getHostUrls(port) {
   return urls;
 }
 
-export function createGameServer({ port = 8080 } = {}) {
+export function createGameServer({ port = 8080, countdownSeconds = 10 } = {}) {
   const wss = new WebSocketServer({ port });
   /** @type {Map<string, Player>} */
   const players = new Map();
@@ -51,6 +53,11 @@ export function createGameServer({ port = 8080 } = {}) {
   /** @type {string | null} */
   let hostId = null;
   let matchStarted = false;
+  let gameStarted = false;
+  /** @type {number | null} */
+  let countdownEndsAt = null;
+  /** @type {NodeJS.Timeout | null} */
+  let countdownTimer = null;
 
   function ensureHost() {
     if (hostId && players.has(hostId)) return;
@@ -62,13 +69,69 @@ export function createGameServer({ port = 8080 } = {}) {
     return Array.from(players.values()).filter((p) => p.role !== Role.SPECTATOR);
   }
 
+  function confirmedActivePlayers() {
+    return activePlayers().filter((p) => p.confirmed);
+  }
+
+  function confirmedVillainExists() {
+    return Array.from(players.values()).some((p) => p.confirmed && p.role === Role.VILLAIN);
+  }
+
+  function confirmedHeroesCount() {
+    return Array.from(players.values()).filter((p) => p.confirmed && p.role === Role.HERO).length;
+  }
+
+  function classTaken(classId) {
+    return Array.from(players.values()).some((p) => p.confirmed && p.classId === classId);
+  }
+
   function lobbyState() {
     ensureHost();
     return {
       maxPlayers: 4,
       hostId,
       matchStarted,
-      players: Array.from(players.values()).map((p) => ({ id: p.id, name: p.name, role: p.role, ready: p.ready })),
+      countdownEndsAt: countdownEndsAt ?? undefined,
+      gameStarted,
+      players: Array.from(players.values()).map(lobbyPlayerState),
+    };
+  }
+
+  function broadcast(type, payload) {
+    const msg = encode({ type, ...payload });
+    for (const p of players.values()) {
+      p.ws.send(msg);
+    }
+  }
+
+  function maybeStartCountdown() {
+    if (!matchStarted) return;
+    if (gameStarted) return;
+    if (countdownEndsAt) return;
+
+    const confirmed = confirmedActivePlayers();
+    if (confirmed.length !== 4) return;
+
+    const ms = Math.max(0, Math.floor(countdownSeconds * 1000));
+    countdownEndsAt = Date.now() + ms;
+    broadcast(MsgType.COUNTDOWN, { endsAt: countdownEndsAt });
+    broadcastLobby();
+
+    countdownTimer = setTimeout(() => {
+      gameStarted = true;
+      broadcast(MsgType.GAME_BEGIN, {});
+      broadcastLobby();
+    }, ms);
+  }
+
+  function lobbyPlayerState(p) {
+    return {
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      ready: p.ready,
+      classId: p.classId ?? undefined,
+      confirmed: p.confirmed ? true : undefined,
     };
   }
 
@@ -83,7 +146,15 @@ export function createGameServer({ port = 8080 } = {}) {
     const playerId = makeId();
 
     /** @type {Player} */
-    const player = { id: playerId, name: 'Anonymous', role: Role.SPECTATOR, ready: false, ws };
+    const player = {
+      id: playerId,
+      name: 'Anonymous',
+      role: Role.SPECTATOR,
+      classId: null,
+      confirmed: false,
+      ready: false,
+      ws,
+    };
     players.set(playerId, player);
     ensureHost();
 
@@ -98,8 +169,11 @@ export function createGameServer({ port = 8080 } = {}) {
       const msg = res.data;
       if (msg.type === MsgType.JOIN) {
         player.name = msg.name.slice(0, 24);
-        player.role = assignRole(Array.from(players.values()).filter((p) => p.id !== player.id));
+        const activeCount = activePlayers().filter((p) => p.id !== player.id).length;
+        player.role = activeCount < 4 ? Role.UNASSIGNED : Role.SPECTATOR;
         player.ready = false;
+        player.classId = null;
+        player.confirmed = false;
 
         if (!hostId) hostId = player.id;
         ensureHost();
@@ -127,6 +201,58 @@ export function createGameServer({ port = 8080 } = {}) {
         broadcastLobby();
       }
 
+      if (msg.type === MsgType.PICK) {
+        if (!matchStarted) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'match not started' }));
+          return;
+        }
+        if (gameStarted) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'game already started' }));
+          return;
+        }
+        if (player.role === Role.SPECTATOR) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'spectator cannot pick' }));
+          return;
+        }
+        if (player.confirmed) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'already confirmed' }));
+          return;
+        }
+        const classId = msg.classId.trim();
+        if (!isAllowedClassId(classId)) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'invalid class' }));
+          return;
+        }
+
+        const desiredRole = classToRole(classId);
+        const heroesConfirmed = confirmedHeroesCount();
+        const villainConfirmed = confirmedVillainExists();
+
+        if (desiredRole === Role.HERO && heroesConfirmed >= 3) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'heroes already full' }));
+          return;
+        }
+        if (desiredRole === Role.VILLAIN && villainConfirmed) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'villain already taken' }));
+          return;
+        }
+        if (desiredRole === Role.HERO && classTaken(classId)) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'class already taken' }));
+          return;
+        }
+        if (desiredRole === Role.VILLAIN && classTaken(classId)) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'class already taken' }));
+          return;
+        }
+
+        player.role = desiredRole;
+        player.classId = classId;
+        player.confirmed = true;
+
+        broadcastLobby();
+        maybeStartCountdown();
+      }
+
       if (msg.type === MsgType.START) {
         ensureHost();
         if (!hostId || player.id !== hostId) {
@@ -135,6 +261,10 @@ export function createGameServer({ port = 8080 } = {}) {
         }
         if (matchStarted) {
           ws.send(encode({ type: MsgType.ERROR, message: 'match already started' }));
+          return;
+        }
+        if (gameStarted) {
+          ws.send(encode({ type: MsgType.ERROR, message: 'game already started' }));
           return;
         }
 
@@ -149,6 +279,12 @@ export function createGameServer({ port = 8080 } = {}) {
         }
 
         matchStarted = true;
+        gameStarted = false;
+        countdownEndsAt = null;
+        if (countdownTimer) {
+          clearTimeout(countdownTimer);
+          countdownTimer = null;
+        }
 
         const spawnPoints = [
           { x: -2, z: 0 },
@@ -172,6 +308,17 @@ export function createGameServer({ port = 8080 } = {}) {
     ws.on('close', () => {
       players.delete(playerId);
       ensureHost();
+
+      // If someone leaves before the game begins, reset countdown.
+      // (Simple behavior: require 4 confirmed again.)
+      if (!gameStarted && countdownEndsAt) {
+        countdownEndsAt = null;
+        if (countdownTimer) {
+          clearTimeout(countdownTimer);
+          countdownTimer = null;
+        }
+      }
+
       broadcastLobby();
     });
 

@@ -23,4 +23,9 @@ describe('shared messages', () => {
     expect(decode(JSON.stringify({ type: MsgType.READY, ready: true })).ok).toBe(true);
     expect(decode(JSON.stringify({ type: MsgType.READY, ready: 'yes' })).ok).toBe(false);
   });
+
+  it('validates pick requires classId', () => {
+    expect(decode(JSON.stringify({ type: MsgType.PICK, classId: 'hero:tank' })).ok).toBe(true);
+    expect(decode(JSON.stringify({ type: MsgType.PICK, classId: '' })).ok).toBe(false);
+  });
 });

@@ -10,7 +10,8 @@
     "test": "echo \"(client tests scaffolded; add Playwright later)\" && exit 0"
   },
   "dependencies": {
-    "@hack/shared": "workspace:*"
+    "@hack/shared": "workspace:*",
+    "three": "^0.164.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",

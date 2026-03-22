@@ -5,30 +5,38 @@
  * @typedef {{type:'join', name:string}} JoinMsg
  * @typedef {{type:'ready', ready:boolean}} ReadyMsg
  * @typedef {{type:'start'}} StartMsg
+ * @typedef {{type:'pick', classId:string}} PickMsg
  * @typedef {{type:'welcome', playerId:string, role:string, lobby: LobbyState, hostUrls?: string[]}} WelcomeMsg
  * @typedef {{type:'lobby', lobby: LobbyState}} LobbyMsg
  * @typedef {{type:'input', seq:number, buttons:{jump?:boolean}, axis:{x:number, z:number}}} InputMsg
  * @typedef {{type:'match_start', seed:number, spawns: Array<{id:string, x:number, z:number}>}} MatchStartMsg
+ * @typedef {{type:'countdown', endsAt:number}} CountdownMsg
+ * @typedef {{type:'game_begin'}} GameBeginMsg
  * @typedef {{type:'error', message:string}} ErrorMsg
  *
  * @typedef {{
- *   players: Array<{ id:string, name:string, role:string, ready?: boolean }>,
+ *   players: Array<{ id:string, name:string, role:string, ready?: boolean, classId?: string, confirmed?: boolean }>,
  *   maxPlayers: number
  *   hostId?: string
  *   matchStarted?: boolean
+ *   countdownEndsAt?: number
+ *   gameStarted?: boolean
  * }} LobbyState
  *
- * @typedef {JoinMsg|ReadyMsg|StartMsg|WelcomeMsg|LobbyMsg|InputMsg|MatchStartMsg|ErrorMsg} AnyMsg
+ * @typedef {JoinMsg|ReadyMsg|StartMsg|PickMsg|WelcomeMsg|LobbyMsg|InputMsg|MatchStartMsg|CountdownMsg|GameBeginMsg|ErrorMsg} AnyMsg
  */
 
 export const MsgType = /** @type {const} */ ({
   JOIN: 'join',
   READY: 'ready',
   START: 'start',
+  PICK: 'pick',
   WELCOME: 'welcome',
   LOBBY: 'lobby',
   INPUT: 'input',
   MATCH_START: 'match_start',
+  COUNTDOWN: 'countdown',
+  GAME_BEGIN: 'game_begin',
   ERROR: 'error',
 });
 
@@ -77,6 +85,12 @@ export function decode(raw) {
       return { ok: true, data: msg };
 
     case MsgType.START:
+      return { ok: true, data: msg };
+
+    case MsgType.PICK:
+      if (typeof msg.classId !== 'string' || msg.classId.trim().length === 0) {
+        return { ok: false, error: 'pick.classId required' };
+      }
       return { ok: true, data: msg };
 
     case MsgType.INPUT:

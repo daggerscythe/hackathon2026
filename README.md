@@ -58,17 +58,26 @@ Notes:
 
 - One player runs the server on LAN.
 - Clients connect to `ws://<host-ip>:<port>`.
-- Server assigns:
-	- first 3 connected players => heroes
-	- 4th => villain
-	- any extra => spectator or “waiting”
+- Server assigns **slots** (first 4 are active, extra are spectators).
+- **Hero/Villain is NOT assigned at join** — it is confirmed during Character Select.
 
-### 2) Ready state
+### 2) Character Select (first-come-first-serve)
+
+- After the host starts the match, everyone enters Character Select.
+- Players confirm a class; the server locks it first-come-first-serve.
+- Constraints:
+	- exactly 1 villain total
+	- up to 3 heroes total
+	- hero subclasses are unique (no duplicates)
+
+After the last active player confirms their class, the server starts a **10 second countdown**, then the game officially begins.
+
+### 3) Ready state
 
 - Server waits until 4 players are connected (or a Start button).
 - Server sends `match_start` with initial spawn positions.
 
-### 3) Match loop (basic)
+### 4) Match loop (basic)
 
 - Each tick:
 	- apply inputs -> velocity
@@ -136,6 +145,12 @@ Later we can add:
 - knockback
 - i-frames
 - particles
+
+## State structure note (ECS vs simple objects)
+
+For the MVP, a simple server-side `players` map + a fixed tick loop is usually faster to iterate than a full ECS.
+
+If the project grows (dozens of systems/components, many entity types), an ECS can help keep logic modular — but we can defer that until movement/combat is stable.
 
 ## Assets + animation
 
