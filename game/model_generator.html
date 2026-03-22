@@ -503,10 +503,10 @@ function buildModel(params) {
  
     const capeShape = new THREE.BufferGeometry();
     const verts = new Float32Array([
-      -capeTopW / 2,  0,           0.05,
-       capeTopW / 2,  0,           0.05,
-       capeBotW / 2, -capeH,       0.2,
-      -capeBotW / 2, -capeH,       0.2,
+      -capeTopW / 2,  0,           0.25,
+       capeTopW / 2,  0,           0.25,
+       capeBotW / 2, -capeH,       0.05,
+      -capeBotW / 2, -capeH,       0.05,
     ]);
     const idx = new Uint16Array([0, 1, 2, 0, 2, 3]);
     const normals = new Float32Array([
@@ -517,7 +517,7 @@ function buildModel(params) {
     capeShape.setIndex(new THREE.BufferAttribute(idx, 1));
  
     const cape = new THREE.Mesh(capeShape, capeMat);
-    cape.position.set(0, shoulderY + 0.1, -torsoD / 2);
+    cape.position.set(0, shoulderY + 0.1, -torsoD-0.1);
     modelGroup.add(cape);
   }
  

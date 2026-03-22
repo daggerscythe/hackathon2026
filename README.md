@@ -1,37 +1,145 @@
-# REQUIRED
-## Win/lose condition
-    - defeat opposing side
+# Slaying Goliath
+**A Hackathon Project · OleMiss CS**
+
+A 3v1 asymmetric multiplayer hero fighter built with A-Frame and WebSockets.
+
+---
+
+## Win/Lose Condition
+| Side | Win Condition | Lose Condition |
+|------|--------------|----------------|
+| **Heroes (×3)** | Reduce the villain's HP to 0 | All 3 heroes are defeated |
+| **Villain (×1)** | Defeat all 3 heroes | HP reaches 0 |
+
+If the 3-minute round timer expires, **heroes win** — the villain failed to eliminate them in time.
+
+---
 
 ## Gameplay loop
-    - character select
-    - 1 villain fights 3 heroes
-    - winner  gains exp
+```
+Menu → Mode Select → PIN Lobby → Character Select → Battle → Game Over
+
+↓
+
+Return to Character Select
+```
+1. **Lobby** — players join via a shared PIN code. One player selects villain, up to three select heroes.
+2. **Character Select** — each player chooses a class. A character is randomly assigned from the CSV pool matching that class.
+3. **Battle** — 3-minute round. Heroes cooperate to defeat the villain. Villain must eliminate all heroes before time runs out.
+4. **Game Over** — winning side is declared, EXP is awarded, players return to character select.
+
+---
+
+## Classes
+
+### Hero Classes
+| Class | Primary Attack | Role |
+|-------|---------------|------|
+| Tank | Melee (sword) | High defense frontliner |
+| DPS | Melee (sword) | High strength damage dealer |
+| Support | Melee (sword) | Healer — can heal self or allies |
+| Mage | Magic (fireball) | Ranged spell caster |
+
+### Villain Classes
+| Class | Primary Attack | Role |
+|-------|---------------|------|
+| Brute | Melee (sword) | High strength brawler |
+| Agile | Melee (sword) | Fast, light hitter |
+| Mage | Magic (fireball) | Ranged spell caster |
+
+---
+
+## Combat System
+
+### Base Stats
+- All players start with **100 HP**
+- Base damage is **10** per hit
+
+### Stat Formulas (CSV values are percentages, 0-100)
+| Stat | Formula | Example |
+|------|---------|---------|
+| **Strength** (melee damage) | `BASE_DAMAGE × (strength / 100)` | strength 70 → deals 7 raw damage |
+| **Magic** (ranged damage) | `BASE_DAMAGE × (magic / 100)` | magic 80 → deals 8 raw damage |
+| **Defense** (damage reduction) | `raw_damage × (1 - defense / 100)` | defense 70 → takes 30% of incoming damage |
+| **Speed** (movement) | `BASE_SPEED × (speed / 100)` | speed 50 → moves at half speed |
+| **Power** (healing) | `5 × (power / 100)` HP per second | power 70 → heals 3.5 HP/sec |
+
+### Final Damage Formula
+```
+raw_damage   = BASE_DAMAGE × attacker_stat / 100
+damage_taken = raw_damage  × (1 - defender_defense / 100)
+```
+
+### Villain Scaling
+The villain gains **+50 HP** each time a hero is defeated, rewarding aggressive play.
+ 
+### Cooldowns
+| Ability | Cooldown |
+|---------|----------|
+| Magic attack | 3 seconds |
+| Heal | 5 seconds |
+| Melee attack | None |
+ 
+---
 
 ## CSV integration:
-    - Playable characters
+Characters are loaded from `data.csv`. Each row represents a playable character.
+ 
+### Parsed Fields
+| Field | Type | Usage |
+|-------|------|-------|
+| `Name` | string | Display name |
+| `Strength` | 0–100 | Melee damage multiplier |
+| `Magic` | 0–100 | Ranged damage multiplier |
+| `Defense` | 0–100 | Damage reduction multiplier |
+| `Speed` | 0–100 | Movement speed multiplier |
+| `Power` | 0–100 | Healing rate multiplier |
 
-# DETAILS
-    - Earnest: UI
-    - Bisesh: models
-    - Dani: game logic
-    - Ember: CSV integration
-    - Remaining: multiplayer (EE)
-    
-# Asset Acquisition
-    - Map or Stage to be used
-    - Character 1 Acquisition (TBD)
-    - Character 2 Acquisition (TBD)
-    - Character 3 Acquisition (TBD)
-    - Character 4 Acquisition (TBD)
-    - Character 5 Acquisition (TBD)
-    - Character 6 Acquisition (TBD)
-    - Character 7 Acquisition (TBD)
-## Game genre:
-    - 4-player 3rd person hero fighter/shooter friend-slop 
-    
+### Class Assignment
+Characters are classified at load time by their stats. A player picks a class during character select, then receives a **randomly assigned character** from that class pool.
+ 
+| Class | Classification Rules |
+|-------|---------------------|
+| Tank | Defense ≥ 70, Speed ≤ 50 |
+| DPS | Strength ≥ 80, Defense ≤ 60 |
+| Support | Power ≥ 70, Strength ≤ 20, Defense ≤ 20 |
+| Hero Mage | Magic ≥ 80, Defense ≤ 40 |
+| Brute | isVillain, Strength ≥ 80 |
+| Agile | isVillain, Speed ≥ 80 |
+| Villain Mage | isVillain, Magic ≥ 80 |
+ 
+---
+
 ## Tech Stack
-    - A-FRAME
-    - WebSockets
+| Layer | Technology |
+|-------|-----------|
+| 3D Engine | A-Frame 1.5.0 |
+| Physics | aframe-physics-system (c-frame fork) |
+| Multiplayer | WebSockets |
+| Data | CSV (Papa Parse) |
+| Models | Custom low-poly GLB (Three.js) |
+ 
+---
+
+## Team
+| Name | Role |
+|------|------|
+| Earnest | UI |
+| Bisesh | 3D Models |
+| Dani | Game Logic |
+| Ember | CSV Integration |
+| Remaining | Multiplayer (WebSockets) |
+ 
+---
+    
+## MVP+ Features
+- Power-up pickups throughout the arena
+- Additional maps / levels
+- Randomized CSV stat variation per match
+- Tutorial / help system
+- 2v2 mode
+- Player ranks and progression 
+
     
 ## Inutitive user UI & mechanisms:
 
@@ -39,12 +147,5 @@
 ### Color Scheme
     - Primary (TBD)
     - Secondary (TBD)
-
-## MVP+:
-    - additional levels
-    - randomize CSV characteristics
-    - tutorial or help system
-    - multiplayer (3v1 or 2v2)
-    - ranks
 
 ## Modeling Params
