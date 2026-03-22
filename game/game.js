@@ -1,4 +1,3 @@
-
 // =================================================
 // Event Bus - communicating with other files
 // =================================================
@@ -957,5 +956,55 @@ AFRAME.registerComponent('game-manager', {
   clearProjectiles() {
     const projectiles = this.el.querySelectorAll('.projectile-entity');
     projectiles.forEach(p => p.parentNode.removeChild(p));
+  },
+});
+
+// ============================================
+// NAME TAG
+// Attach to any player entity:
+// <a-entity name-tag="label: Adventurer; color: #c9a84c">
+// Renders a floating text label above the character's head.
+// ============================================
+AFRAME.registerComponent('name-tag', {
+  schema: {
+    label: { type: 'string',  default: '' },
+    color: { type: 'color',   default: '#c9a84c' },
+    yOffset: { type: 'number', default: 2.4 },
+  },
+
+  init() {
+    // Background pill
+    this.bg = document.createElement('a-plane');
+    this.bg.setAttribute('width',    '1.6');
+    this.bg.setAttribute('height',   '0.36');
+    this.bg.setAttribute('color',    '#04060c');
+    this.bg.setAttribute('opacity',  '0.72');
+    this.bg.setAttribute('position', `0 ${this.data.yOffset} 0`);
+    this.bg.setAttribute('look-at',  '[camera]');
+
+    // Text label
+    this.text = document.createElement('a-text');
+    this.text.setAttribute('value',    this.data.label);
+    this.text.setAttribute('align',    'center');
+    this.text.setAttribute('color',    this.data.color);
+    this.text.setAttribute('width',    '1.4');
+    this.text.setAttribute('position', `0 ${this.data.yOffset + 0.01} 0`);
+    this.text.setAttribute('look-at',  '[camera]');
+    this.text.setAttribute('font',     'https://cdn.aframe.io/fonts/Exo2Bold.fnt');
+
+    this.el.appendChild(this.bg);
+    this.el.appendChild(this.text);
+  },
+
+  update() {
+    if (this.text) {
+      this.text.setAttribute('value', this.data.label);
+      this.text.setAttribute('color', this.data.color);
+    }
+  },
+
+  remove() {
+    if (this.bg)   this.el.removeChild(this.bg);
+    if (this.text) this.el.removeChild(this.text);
   },
 });

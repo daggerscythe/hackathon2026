@@ -600,10 +600,11 @@ function confirmSelection() {
   if (selectedIdx === null) { alert('Choose a champion first.'); return; }
   const chosen = CHARACTERS[selectedIdx];
   sessionStorage.setItem('selectedCharacter', chosen.name);
-  sessionStorage.setItem('selectedClass', chosen.cls);
-  // For now navigate back — swap for actual game page once ready
+  sessionStorage.setItem('selectedClass',     chosen.cls);
+  // Proceed to the game arena
+  window.location.href = '/index.html';
 }
-function goBack() { window.location.href = 'mode-select.html'; }
+function goBack() { window.location.href = 'pinCode.html'; }
   
 
 

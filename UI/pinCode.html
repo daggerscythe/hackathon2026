@@ -407,9 +407,12 @@
           break;
 
         case 'start':
-          // Pass the Hero/Villain choice and gameId to the character selection screen
-          sessionStorage.setItem('characterSide', myCharacter || 'Hero');
-          sessionStorage.setItem('gameId', currentGameId);
+          sessionStorage.setItem('lobbyUsername',  username);
+          sessionStorage.setItem('lobbyCharacter', myCharacter || 'Hero');
+          sessionStorage.setItem('lobbyGameId',    currentGameId);
+          sessionStorage.setItem('lobbyWsHost',    serverIP || 'localhost');
+          sessionStorage.setItem('characterSide',  myCharacter || 'Hero');
+          sessionStorage.setItem('gameId',         currentGameId);
           window.location.href = 'characterSelection.html';
           break;
 

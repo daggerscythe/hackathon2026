@@ -5,10 +5,14 @@ const os = require("os");
 const { server: WebSocketServer } = require("websocket");
 
 // ── HTTP server (serves static game files) ────────────────────────────────
-const app = express();
-const uiPath = path.join(__dirname, "../UI");
+const app      = express();
+const rootPath = path.join(__dirname, "..");
+const uiPath   = path.join(__dirname, "../UI");
+const gamePath = path.join(__dirname, "../game");
 
-app.use(express.static(uiPath));
+app.use(express.static(uiPath));                         // UI/    → menu.html, pinCode.html, etc.
+app.use(express.static(gamePath));                       // game/  → game.js at /game.js
+app.use(express.static(rootPath, { index: false }));     // root/  → index.html only when explicitly requested, never as default
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(uiPath, "menu.html"));
