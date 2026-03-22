@@ -15,6 +15,9 @@
       pointer-events: none;
     }
   </style>
+
+  <script src="audio.js"></script>
+  <script src="consistent_audio.js"></script>
 </head>
 <body>
 
@@ -65,6 +68,9 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    document.addEventListener('click', tryStartTheme, { once: true });
+    document.addEventListener('keydown', tryStartTheme, { once: true });
+    
     // ── Three.js — same wireframe style as menu.html ──────────────────────
     const canvas = document.getElementById('bg-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });

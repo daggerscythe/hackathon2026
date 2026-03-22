@@ -12,7 +12,8 @@ const SOUNDS = {
     victory_hero: 'assets/sounds/victory-hero.mp3',
     victory_villain: 'assets/sounds/victory-villian.mp3',
     game_theme: 'assets/sounds/Dark Souls - CC.mp3',
-    battle_theme: 'assets/sounds/battle-dun-dun.mp3'
+    battle_theme: 'assets/sounds/battle-dun-dun.mp3',
+    transition_theme: 'assets/sounds/transition.mp3'
 };
 
 // audio cache
@@ -42,12 +43,13 @@ Object.keys(SOUNDS).forEach(loadSound);
  * @param {string} key - key from the SOUNDS registry
  * @param {number} [volume=1] - 0.0 to 1.0
  */
-function playSound(key, volume = 1) {
+function playSound(key, volume = 1, loop = false) {
     console.log("i am playing the sound here")
     const audio = loadSound(key);
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, volume));
     audio.currentTime = 0;
+    audio.loop = loop
     audio.play().catch(err => {
         // Browsers block autoplay until the user interacts with the page.
         // This is a silent fallback — the first keypress (H) counts as interaction,
@@ -94,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!localId) return;
         if (characterId !== localId) return; // only play if the local player died
 
-        playSound('death');
+        playSound('death', volume = 0.6);
     });
 
     onMagicFired(({ attackerId }) => {
@@ -115,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     onMatchStarted(() => {
-        playSound('battle_theme');
+        playSound('battle_theme', volume = 0.40, loop = true);
     });
 
     vict

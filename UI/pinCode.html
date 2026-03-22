@@ -270,6 +270,9 @@
 
     @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
   </style>
+
+    <script src="audio.js"></script>
+    <script src="consistent_audio.js"></script>
 </head>
 <body>
 
@@ -399,6 +402,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+      document.addEventListener('click', tryStartTheme, { once: true });
+      document.addEventListener('keydown', tryStartTheme, { once: true });
 
     // ══════════════════════════════════════════════════════════════════════
     // STATE

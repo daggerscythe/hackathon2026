@@ -18,8 +18,13 @@
       z-index: 1;
     }
   </style>
+
+  <script src="audio.js"></script>
+  <script src="consistent_audio.js"></script>
+
 </head>
 <body>
+  
   <canvas id="bg-canvas"></canvas>
 
   <div class="menu-container">
@@ -37,6 +42,9 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    document.addEventListener('click', tryStartTheme, { once: true });
+    document.addEventListener('keydown', tryStartTheme, { once: true });
+
     // ── Scene setup ──────────────────────────────────────────────────────────
     const canvas = document.getElementById('bg-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -181,7 +189,10 @@
     });
 
     // ── Game functions ───────────────────────────────────────────────────────
-    function startGame()    { window.location.href = "mode-select.html"; }
+    function startGame()    { 
+    window.location.href = "mode-select.html"; 
+    
+    }
     function continueGame() { alert("Continue clicked"); }
     function openSettings() { alert("Settings clicked"); }
     function quitGame()     { alert("Quit clicked"); }
