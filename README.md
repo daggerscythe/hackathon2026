@@ -82,6 +82,15 @@ The villain gains **+50 HP** each time a hero is defeated, rewarding aggressive 
  
 ---
 
+## Controls
+| Action | Key |
+|--------|-----|
+| Move | WASD |
+| Jump | Space |
+| Attack / Heal Ally | LMB |
+| Heal Self (Support only) | RMB |
+| Look | Mouse |
+
 ## CSV integration:
 Characters are loaded from `data.csv`. Each row represents a playable character.
  
@@ -130,18 +139,13 @@ Characters are classified at load time by their stats. A player picks a class du
 | Ember | CSV Integration & Multiplayer (WebSockets) |
  
 ---
-    
-## MVP+ Features
-- Power-up pickups throughout the arena
-- Additional maps / levels
-- Randomized CSV stat variation per match
-- Tutorial / help system
-- 2v2 mode
-- Player ranks and progression 
 
-    
-## Inutitive user UI & mechanisms:
-
-### Color Scheme
-
-## Modeling Params
+## Project Structure
+```
+/game          → Core game logic (game.js, physics.js, network.js, ui.js)
+/UI            → Menu, lobby, and character select screens
+/assets        → 3D models, textures, audio
+/server        → WebSocket + HTTP server (index.js)
+data.csv       → Character database (~780 characters)
+index.html     → Main game scene (A-Frame)
+```
