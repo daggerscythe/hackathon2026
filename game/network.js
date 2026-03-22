@@ -2,7 +2,9 @@
 // NETWORK — WebSocket multiplayer client
 // ============================================
 
-const ws = new WebSocket('ws://' + location.hostname + ':9090');
+const WS_HOST = sessionStorage.getItem('lobbyWsHost') || location.hostname;
+const WS_PROTO = location.protocol === 'https:' ? 'wss' : 'ws';
+const ws = new WebSocket(`${WS_PROTO}://${WS_HOST}:9090`);
 
 // our own player data from character select
 const MY_ID       = sessionStorage.getItem('clientId');

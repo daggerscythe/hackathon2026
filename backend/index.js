@@ -43,7 +43,11 @@ app.listen(PORT, HOST, () => {
 });
 // ── WebSocket server ──────────────────────────────────────────────────────
 const httpServer = http.createServer();
-httpServer.listen(9090, () => console.log("WebSocket → ws://localhost:9090"));
+httpServer.listen(9090, "0.0.0.0", () => {
+  const localIp = getLocalIp();
+  console.log("WebSocket → ws://localhost:9090");
+  console.log(`WS LAN   → ws://${localIp}:9090`);
+});
 
 const wsServer = new WebSocketServer({ httpServer });
 
@@ -95,22 +99,22 @@ function makeId() {
 // ── WebSocket connections ─────────────────────────────────────────────────
 wsServer.on("request", request => {
   const conn     = request.accept(null, request.origin);
-  const clientId = makeId();
-  clients[clientId] = { connection: conn, username: null };
+  let connClientId = makeId();
+  clients[connClientId] = { connection: conn, username: null };
 
   // Tell the browser its assigned ID immediately
-  send(conn, { method: "connect", clientId });
+  send(conn, { method: "connect", clientId: connClientId });
 
   // ── Disconnect: clean up the client from any game they were in ──────────
   conn.on("close", () => {
     for (const game of Object.values(games)) {
       const before = game.players.length;
-      game.players = game.players.filter(p => p.clientId !== clientId);
+      game.players = game.players.filter(p => p.clientId !== connClientId);
       if (game.players.length !== before) {
         broadcast(game, { method: "playerLeft", game: publicGame(game) });
       }
     }
-    delete clients[clientId];
+    delete clients[connClientId];
   });
 
   // ── Incoming messages ────────────────────────────────────────────────────
@@ -120,7 +124,7 @@ wsServer.on("request", request => {
     try { msg = JSON.parse(raw.utf8Data); } catch { return; }
 
     const { method, username } = msg;
-    const client = clients[clientId]; // closure ID, always valid
+    const client = clients[connClientId]; // connection's current id
     if (!client) return;
 
     // Save username whenever it arrives
@@ -130,7 +134,7 @@ wsServer.on("request", request => {
     if (method === "create") {
       const pin   = makePin();
       const color = COLORS[0];
-      games[pin]  = { id: pin, players: [{ clientId, username: client.username || "Host", color, ready: false, character: null }] };
+      games[pin]  = { id: pin, players: [{ clientId: connClientId, username: client.username || "Host", color, ready: false, character: null }] };
 
       const pg = publicGame(games[pin]);
       send(conn, { method: "create", gameId: pin, game: pg });
@@ -150,13 +154,13 @@ wsServer.on("request", request => {
         send(conn, { method: "error", message: "This room is full (6/6 players)." });
         return;
       }
-      if (game.players.find(p => p.clientId === clientId)) {
+      if (game.players.find(p => p.clientId === connClientId)) {
         send(conn, { method: "error", message: "You are already in this game." });
         return;
       }
 
       const color = COLORS[game.players.length];
-      game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
+      game.players.push({ clientId: connClientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
 
       const pg = publicGame(game);
       broadcast(game, { method: "join",   gameId: pin, game: pg });
@@ -167,7 +171,7 @@ wsServer.on("request", request => {
     if (method === "ready") {
       const game = games[msg.gameId];
       if (!game) return;
-      const player = game.players.find(p => p.clientId === clientId);
+      const player = game.players.find(p => p.clientId === connClientId);
       if (!player) return;
 
       player.ready     = !player.ready;
@@ -182,7 +186,7 @@ wsServer.on("request", request => {
       const game = games[msg.gameId];
       if (!game) return;
       // only host can start
-      if (game.players[0]?.clientId !== clientId) {
+      if (game.players[0]?.clientId !== connClientId) {
         send(conn, { method: 'error', message: 'Only the host can start the game.' });
         return;
       }
@@ -219,53 +223,53 @@ wsServer.on("request", request => {
       const existingId = msg.clientId;
       const gameId     = msg.gameId;
 
-      if (!existingId || !gameId) return;
+      if (!existingId) return;
 
       // re-register this connection under the original clientId
       if (clients[existingId]) {
-        // update existing entry with new connection
         clients[existingId].connection = conn;
+        if (msg.username) clients[existingId].username = msg.username;
       } else {
-        // first time seeing this clientId on this connection
-        clients[existingId] = { connection: conn, username: msg.username };
+        clients[existingId] = { connection: conn, username: msg.username || client.username };
       }
 
-      // remove the temp clientId assigned on connect
-      if (clientId !== existingId) {
-        delete clients[clientId];
+      // remove the temp id assigned to this new page load
+      if (connClientId !== existingId) {
+        delete clients[connClientId];
+        connClientId = existingId;
       }
 
-      // make sure this player is in the game's player list
-      const game = games[gameId];
-      if (game) {
-        const alreadyIn = game.players.find(p => p.clientId === existingId);
-        if (!alreadyIn) {
-          game.players.push({
-            clientId: existingId,
-            username: msg.username || existingId,
-            color:    'White',
-            ready:    true,
-            character: null,
+      // If a gameId was provided, ensure the player exists in the game.
+      if (gameId) {
+        const game = games[gameId];
+        if (game) {
+          const alreadyIn = game.players.find(p => p.clientId === existingId);
+          if (!alreadyIn) {
+            game.players.push({
+              clientId: existingId,
+              username: msg.username || existingId,
+              color:    'White',
+              ready:    true,
+              character: null,
+            });
+          } else {
+            if (msg.username) alreadyIn.username = msg.username;
+          }
+
+          console.log(`Player ${existingId} re-identified in game ${gameId}`);
+
+          // tell this player about everyone else currently in the game
+          send(conn, {
+            method:  'gameState',
+            players: game.players
+              .filter(p => p.clientId !== existingId)
+              .map(p => ({
+                clientId:  p.clientId,
+                username:  p.username,
+                character: p.character,
+              })),
           });
-        } else {
-          // update connection reference
-          alreadyIn.clientId = existingId;
         }
-
-        console.log(`Player ${existingId} re-identified in game ${gameId}`);
-
-        // tell this player about everyone else currently in the game
-        // so they can spawn remote entities immediately
-        send(conn, {
-          method:  'gameState',
-          players: game.players
-            .filter(p => p.clientId !== existingId)
-            .map(p => ({
-              clientId:  p.clientId,
-              username:  p.username,
-              character: p.character,
-            })),
-        });
       }
     }
 
@@ -274,11 +278,18 @@ wsServer.on("request", request => {
       const game = games[msg.gameId];
       if (!game) return;
 
-      // use the closure clientId which is now the re-identified one
+      const payload = {
+        method:   'playerMove',
+        clientId: connClientId,
+        gameId:   msg.gameId,
+        position: msg.position,
+        rotation: msg.rotation,
+      };
+
       game.players.forEach(p => {
-        if (p.clientId === msg.clientId) return; // skip sender
+        if (p.clientId === connClientId) return; // skip sender
         const c = clients[p.clientId];
-        if (c) send(c.connection, { ...msg });
+        if (c) send(c.connection, payload);
       });
     }
 
@@ -288,9 +299,18 @@ wsServer.on("request", request => {
       if (!game) return;
 
       game.players.forEach(p => {
-        if (p.clientId === clientId) return;
+        if (p.clientId === connClientId) return;
         const c = clients[p.clientId];
-        if (c) send(c.connection, { ...msg, clientId });
+        if (c) {
+          send(c.connection, {
+            method:     'playerAttack',
+            clientId:   connClientId,
+            gameId:     msg.gameId,
+            attackType: msg.attackType,
+            targetId:   msg.targetId,
+            damage:     msg.damage,
+          });
+        }
       });
     }
 
@@ -298,7 +318,7 @@ wsServer.on("request", request => {
     if (method === 'playerDied') {
       const game = games[msg.gameId];
       if (!game) return;
-      broadcast(game, { ...msg, clientId });
+      broadcast(game, { ...msg, clientId: connClientId });
     }
   });
 });

@@ -781,6 +781,7 @@
           sessionStorage.setItem('clientId',           clientId);
           sessionStorage.setItem('gameId',             currentGameId);
           sessionStorage.setItem('lobbyWsHost',        serverIP);
+          sessionStorage.setItem('lobbyUsername',      username || '');
           sessionStorage.setItem('lobbyPlayers',       JSON.stringify(msg.game.players));
           sessionStorage.setItem('selectedCharacter',  myCharacter?.name  || '');
           sessionStorage.setItem('selectedClass',      (() => {
