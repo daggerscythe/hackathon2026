@@ -258,6 +258,26 @@ wsServer.on('request', request => {
       });
     }
 
+    // ── ABILITY CAST (VFX sync): relay to everyone else ─────────────────
+    if (msg.method === 'abilityCast') {
+      const game = games[msg.gameId];
+      if (!game) return;
+
+      game.players.forEach(p => {
+        if (p.clientId === clientId) return;
+        const c = clients[p.clientId];
+        if (!c) return;
+
+        send(c.connection, {
+          method:  'abilityCast',
+          clientId,
+          gameId:  msg.gameId,
+          ability: msg.ability,
+          direction: msg.direction,
+        });
+      });
+    }
+
     // ── PLAYER DIED: relay to everyone ──────────────────────────────────
     if (msg.method === 'playerDied') {
       const game = games[msg.gameId];

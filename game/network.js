@@ -80,6 +80,7 @@ ws.onmessage = (e) => {
       });
       break;
 
+<<<<<<< Updated upstream
     case 'matchOver':
         if (getState() === STATES.BATTLE) {
             endMatch(msg.winner);
@@ -95,6 +96,11 @@ ws.onmessage = (e) => {
             });
         }
         break;
+=======
+    case 'abilityCast':
+      handleAbilityCast(msg);
+      break;
+>>>>>>> Stashed changes
   }
 };
 
@@ -230,6 +236,37 @@ function sendAttackEvent(attackType, targetId, damage) {
     targetId,
     damage,
   }));
+}
+
+// ============================================
+// SEND ABILITY CAST (VFX sync)
+// ============================================
+function sendAbilityCast(ability, payload = {}) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    method:   'abilityCast',
+    clientId: MY_ID,
+    gameId:   sessionStorage.getItem('gameId'),
+    ability,
+    ...payload,
+  }));
+}
+
+// ============================================
+// RECEIVE ABILITY CAST
+// ============================================
+function handleAbilityCast(msg) {
+  if (!msg || !msg.clientId) return;
+  if (msg.clientId === MY_ID) return; // we already spawned locally
+
+  if (msg.ability === 'magic') {
+    const attackerId = `remote-${msg.clientId}`;
+    const direction  = msg.direction;
+    if (!direction) return;
+
+    // reuse existing projectile spawning via game.js event bus
+    emit(GAME_EVENTS.MAGIC_FIRED, { attackerId, direction });
+  }
 }
 
 // ============================================

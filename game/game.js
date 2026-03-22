@@ -551,17 +551,19 @@ function performMelee(attackerId, defenderId) {
 function performMagic(attackerId, direction) {
     const attacker = characters.get(attackerId);
 
-    if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return;
+  if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return false;
     if (isOnCooldown(attackerId, 'magic')) {
         const remaining = (getCooldownRemaining(attackerId, 'magic') / 1000).toFixed(1);
         console.log(`${attacker.name} magic on cooldown - ${remaining}s remaining`);
-        return;
+    return false;
     }
 
     cooldownTracker.get(attackerId).magic = Date.now();
     console.log(`${attacker.name} fired magic towards ${JSON.stringify(direction)}`);
 
     emit(GAME_EVENTS.MAGIC_FIRED, { attackerId, direction });
+
+    return true;
 }
 
 /**
@@ -854,24 +856,39 @@ AFRAME.registerComponent('projectile', {
     const attacker = characters.get(this.data.attackerId);
     if (!attacker) return;
 
+    // Projectiles are spawned on other clients for VFX sync. Only the locally-owned
+    // attacker should apply damage + broadcast the resulting hit.
+    const isLocalAttacker = (this.data.attackerId === 'villain') || (attacker.entityId === 'player-villain');
+    if (!isLocalAttacker) return;
+
     // check against all characters on the opposite side
-    characters.forEach(char => {
-      if (char.role === attacker.role) return; // skip teammates
-      if (!char.isAlive)               return;
+    for (const char of characters.values()) {
+      if (char.role === attacker.role) continue; // skip teammates
+      if (!char.isAlive)               continue;
 
       const targetEl = document.getElementById(char.entityId);
-      if (!targetEl) return;
+      if (!targetEl) continue;
 
       const dist = this.el.object3D.position.distanceTo(
         targetEl.object3D.position
       );
 
-      // 1.0 unit hit radius
-      if (dist < 1.0) {
+      // 1.5 unit hit radius
+      if (dist < 1.5) {
+        const damage = calcDamage(attacker, char, 'magic');
+
+        // apply locally
         applyHit(this.data.attackerId, char.id, 'magic');
+
+        // sync to others (server relays to all other clients)
+        if (typeof sendAttackEvent === 'function') {
+          sendAttackEvent('magic', char.id, damage);
+        }
+
         this.despawn();
+        return;
       }
-    });
+    }
   },
 
   despawn() {
