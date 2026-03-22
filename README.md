@@ -144,7 +144,5 @@ Characters are classified at load time by their stats. A player picks a class du
 
 
 ### Color Scheme
-    - Primary (TBD)
-    - Secondary (TBD)
 
 ## Modeling Params
