@@ -192,11 +192,22 @@
       const localPlayerEl = document.getElementById('player-villain');
       if (localPlayerEl) {
         localPlayerEl.setAttribute('position', `${mySpawnX} ${mySpawnY} ${mySpawnZ}`);
-        const body = localPlayerEl.components['dynamic-body']?.body;
-        if (body) {
+
+        // wait for physics body to be ready before repositioning
+        const applySpawn = () => {
+          const body = localPlayerEl.components['dynamic-body']?.body;
+          if (!body) {
+            setTimeout(applySpawn, 100);
+            return;
+          }
+          console.log('[SPAWN] Physics body ready, applying spawn position');
           body.position.set(mySpawnX, mySpawnY, mySpawnZ);
           body.velocity.set(0, 0, 0);
-        }
+        };
+
+        localPlayerEl.addEventListener('body-loaded', applySpawn, { once: true });
+        // fallback in case body-loaded already fired
+        setTimeout(applySpawn, 500);
       }
 
       // register local player
@@ -208,46 +219,14 @@
       // update local player model and attack-input to match chosen class
       const localModel = document.getElementById('villain-model');
       if (localModel) {
-        localModel.setAttribute('src', `#${CLASS_MODEL[myClass] || 'model-brute'}`);
+        const modelSrc = `#${CLASS_MODEL[myClass] || 'model-brute'}`;
+        console.log('[MODEL] Setting local model to:', modelSrc);
+        localModel.setAttribute('src', modelSrc);
       }
       if (localPlayerEl) {
         localPlayerEl.setAttribute('attack-input', `characterId: villain; attackClass: ${myClass}`);
         localPlayerEl.dataset.characterId = 'villain';
       }
-
-      // spawn remote players at their server-assigned positions
-      // network.js will handle movement sync from here
-      lobbyPlayers.forEach((p, i) => {
-        const cls      = p.character?.cls  || 'tank';
-        const role     = p.character?.role || 'hero';
-        const nickname = p.username        || `Player ${i + 1}`;
-
-        if (p.clientId === myClientId) return;
-
-        const id = `remote-player-${i}`;
-        const x  = p.spawnX ?? 0;
-        const y  = p.spawnY ?? 3;
-        const z  = p.spawnZ ?? 0;
-
-        console.log(`[SPAWN] Remote ${nickname} at x:${x} y:${y} z:${z}`);
-
-        const entity = document.createElement('a-entity');
-        entity.setAttribute('id',         id);
-        entity.setAttribute('position',   `${x} ${y} ${z}`);
-        entity.setAttribute('health-bar', `nickname: ${nickname}; health: 100; maxHealth: 100`);
-
-        const model = document.createElement('a-gltf-model');
-        model.setAttribute('src',      `#${CLASS_MODEL[cls] || 'model-tank'}`);
-        model.setAttribute('scale',    '0.8 0.8 0.8');
-        model.setAttribute('rotation', `0 ${Math.random() * 360} 0`);
-
-        entity.appendChild(model);
-        scene.appendChild(entity);
-
-        addCharacter(id, role, cls, {
-          name: nickname, strength: 70, magic: 60, defense: 30, speed: 50, power: 40,
-        }, id);
-      });
 
       transitionTo(STATES.BATTLE);
     }

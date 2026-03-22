@@ -90,7 +90,7 @@ AFRAME.registerComponent('player-physics', {
 
         // rotate villain model to face camera direction — NOT the physics entity
         const modelEl = document.getElementById('villain-model');
-        if (modelEl) modelEl.object3D.rotation.y = euler.y;
+        if (modelEl) modelEl.object3D.rotation.y = euler.y + Math.PI;
         },
 
     remove() {

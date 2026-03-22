@@ -10,29 +10,31 @@
 (function injectStyles() {
   const link = document.createElement('link');
   link.rel  = 'stylesheet';
-  link.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@700&family=Share+Tech+Mono&display=swap';
+  link.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=Share+Tech+Mono&display=swap';
   document.head.appendChild(link);
 
   const style = document.createElement('style');
   style.textContent = `
-    /* ── CSS vars ────────────────────────────────────────────────────────── */
+    /* ── CSS vars — mirrors menu.css palette exactly ─────────────────────── */
     :root {
       --gold:        #c9a84c;
-      --gold-light:  #e8d090;
-      --gold-dim:    #9a7a30;
+      --gold-light:  #e8c96a;
+      --gold-dim:    rgba(201,168,76,0.55);
+      --gold-solid:  #9a7a30;
       --hero:        #4ca8c9;
       --hero-dim:    #2a6a8a;
       --villain:     #c94c4c;
       --villain-dim: #8a2a2a;
       --heal:        #4cc94c;
       --bg-deep:     rgba(4, 6, 12, 0.92);
-      --bg-panel:    rgba(8, 12, 24, 0.85);
-      --white:       rgba(255,255,255,0.92);
-      --white-dim:   rgba(255,255,255,0.55);
-      --white-faint: rgba(255,255,255,0.25);
+      --bg-panel:    rgba(8, 12, 24, 0.82);
+      --white:       #f0ece4;
+      --white-dim:   rgba(240,236,228,0.6);
+      --white-faint: rgba(240,236,228,0.25);
       --red:         #e74c3c;
       --orange:      #e8962a;
       --green:       #4cc94c;
+      --dark:        #0a0c0f;
       --font-head:   'Cinzel Decorative', serif;
       --font-label:  'Cinzel', serif;
       --font-mono:   'Share Tech Mono', monospace;
@@ -47,259 +49,374 @@
       font-family: var(--font-label);
     }
 
-    /* ── Villain health — bottom-left ────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       VILLAIN PANEL — bottom-left
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-villain {
       position: absolute;
       bottom: 28px;
       left: 28px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      width: 280px;
+      gap: 7px;
+      width: 300px;
+      /* Solid dark backing so it reads over any background */
+      background: linear-gradient(135deg, rgba(4,6,12,0.9) 0%, rgba(8,10,18,0.82) 100%);
+      border: 1px solid rgba(201,168,76,0.2);
+      border-left: 2px solid var(--gold);
+      padding: 14px 16px 14px 20px;
     }
+
+    /* Gold corner accent top-right */
+    #hud-villain::after {
+      content: '';
+      position: absolute;
+      top: -1px; right: -1px;
+      width: 18px; height: 18px;
+      border-top: 1px solid var(--gold);
+      border-right: 1px solid var(--gold);
+      opacity: 0.6;
+    }
+
     .hud-role-label {
-      font-size: 0.48rem;
+      font-size: 0.5rem;
       letter-spacing: 5px;
       text-transform: uppercase;
-      color: var(--gold-dim);
+      color: rgba(201,168,76,0.7);
     }
+
     .hud-name {
       font-family: var(--font-head);
-      font-size: 0.85rem;
+      font-size: 1rem;
       letter-spacing: 3px;
-      color: var(--white);
-      text-shadow: 0 0 16px currentColor;
+      color: var(--gold-light);
+      text-shadow:
+        0 0 28px rgba(201,168,76,0.7),
+        0 2px 6px rgba(0,0,0,0.95);
     }
+
+    /* Bar track */
     .hud-bar-track {
       position: relative;
       width: 100%;
       height: 8px;
       background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.12);
       overflow: visible;
     }
+
+    /* End-cap tick */
+    .hud-bar-track::after {
+      content: '';
+      position: absolute;
+      right: 0; top: -4px;
+      width: 1px; height: 16px;
+      background: var(--gold);
+      opacity: 0.5;
+    }
+
     .hud-bar-fill {
       position: absolute;
       inset: 0;
       height: 100%;
-      transition: width 0.35s cubic-bezier(.4,0,.2,1),
-                  background 0.35s;
+      transition: width 0.38s cubic-bezier(.4,0,.2,1), background 0.38s;
     }
+
     .hud-bar-fill.villain-fill {
       background: linear-gradient(90deg, var(--villain-dim), var(--villain));
+      box-shadow: 0 0 10px rgba(201,76,76,0.55), 0 0 2px rgba(201,76,76,0.8);
     }
+
     .hud-bar-fill.hero-fill {
       background: linear-gradient(90deg, var(--hero-dim), var(--hero));
+      box-shadow: 0 0 10px rgba(76,168,201,0.5), 0 0 2px rgba(76,168,201,0.8);
     }
-    /* flash on damage */
+
     .hud-bar-fill.flash-damage {
-      animation: flashDmg 0.3s ease;
+      animation: flashDmg 0.28s ease;
     }
     @keyframes flashDmg {
-      0%   { filter: brightness(2.5); }
-      100% { filter: brightness(1); }
+      0%   { filter: brightness(3) saturate(1.5); }
+      100% { filter: brightness(1) saturate(1); }
     }
-    /* flash on heal */
+
     .hud-bar-fill.flash-heal {
-      animation: flashHeal 0.4s ease;
+      animation: flashHeal 0.45s ease;
     }
     @keyframes flashHeal {
-      0%,50% { box-shadow: 0 0 12px 4px var(--heal); }
+      0%,45% { box-shadow: 0 0 14px 5px rgba(76,201,76,0.7); }
       100%   { box-shadow: none; }
     }
+
     .hud-hp-text {
       font-family: var(--font-mono);
-      font-size: 0.58rem;
-      color: var(--white-dim);
+      font-size: 0.62rem;
+      color: rgba(240,236,228,0.55);
+      letter-spacing: 2px;
       margin-top: 2px;
     }
 
-    /* ── Hero panel — bottom-right ───────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       HERO PANEL — bottom-right
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-heroes {
       position: absolute;
       bottom: 28px;
       right: 28px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      width: 240px;
+      gap: 14px;
+      width: 260px;
       align-items: flex-end;
+      background: linear-gradient(225deg, rgba(4,6,12,0.9) 0%, rgba(8,10,18,0.82) 100%);
+      border: 1px solid rgba(201,168,76,0.2);
+      border-right: 2px solid var(--gold);
+      padding: 14px 20px 14px 16px;
     }
+
+    /* Gold corner accent top-left */
+    #hud-heroes::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px;
+      width: 18px; height: 18px;
+      border-top: 1px solid var(--gold);
+      border-left: 1px solid var(--gold);
+      opacity: 0.6;
+    }
+
     .hero-row {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 4px;
       width: 100%;
       align-items: flex-end;
-      transition: opacity 0.4s;
-    }
-    .hero-row.defeated {
-      opacity: 0.3;
-      filter: grayscale(1);
-    }
-    .hero-row .hud-name {
-      font-size: 0.65rem;
-      text-align: right;
-    }
-    .hero-role-label {
-      font-size: 0.42rem;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      color: var(--gold-dim);
-    }
-    .skull-badge {
-      font-size: 0.8rem;
-      margin-left: 4px;
-      animation: popIn 0.3s cubic-bezier(.4,0,.2,1);
-    }
-    @keyframes popIn {
-      0%   { transform: scale(0); opacity: 0; }
-      70%  { transform: scale(1.3); }
-      100% { transform: scale(1); opacity: 1; }
+      transition: opacity 0.45s, filter 0.45s;
     }
 
-    /* ── Cooldown bar — bottom-center ────────────────────────────────────── */
+    .hero-row.defeated {
+      opacity: 0.22;
+      filter: grayscale(1) brightness(0.5);
+    }
+
+    .hero-row .hud-name {
+      font-size: 0.78rem;
+      text-align: right;
+    }
+
+    .hero-role-label {
+      font-size: 0.44rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: rgba(201,168,76,0.7);
+    }
+
+    .skull-badge {
+      font-size: 0.8rem;
+      margin-left: 5px;
+      animation: popIn 0.28s cubic-bezier(.4,0,.2,1);
+    }
+    @keyframes popIn {
+      0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+      65%  { transform: scale(1.35) rotate(5deg); }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       COOLDOWN BAR — bottom-center
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-cooldowns {
       position: absolute;
       bottom: 28px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 14px;
+      gap: 10px;
       align-items: flex-end;
+      background: rgba(4,6,12,0.82);
+      border: 1px solid rgba(201,168,76,0.18);
+      padding: 10px 14px 8px;
     }
+
     .cd-slot {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
-      width: 56px;
+      gap: 5px;
+      width: 62px;
     }
+
     .cd-icon {
-      width: 44px;
-      height: 44px;
+      width: 52px;
+      height: 52px;
       border: 1px solid rgba(201,168,76,0.3);
-      background: var(--bg-panel);
+      background: rgba(4,6,12,0.9);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.2rem;
+      font-size: 1.4rem;
       position: relative;
       overflow: hidden;
-      transition: border-color 0.2s;
+      transition: border-color 0.25s, box-shadow 0.25s;
     }
-    .cd-icon.ready {
+
+    /* Corner ornaments */
+    .cd-icon::before,
+    .cd-icon::after {
+      content: '';
+      position: absolute;
+      width: 7px; height: 7px;
       border-color: var(--gold);
-      box-shadow: 0 0 10px rgba(201,168,76,0.35);
+      border-style: solid;
+      opacity: 0.5;
+      z-index: 2;
     }
-    /* sweep overlay for cooldown */
+    .cd-icon::before { top: 2px; left: 2px;  border-width: 1px 0 0 1px; }
+    .cd-icon::after  { bottom: 2px; right: 2px; border-width: 0 1px 1px 0; }
+
+    .cd-icon.ready {
+      border-color: rgba(201,168,76,0.65);
+      box-shadow: 0 0 16px rgba(201,168,76,0.4), inset 0 0 10px rgba(201,168,76,0.08);
+    }
+    .cd-icon.ready::before,
+    .cd-icon.ready::after { opacity: 1; }
+
     .cd-sweep {
       position: absolute;
       inset: 0;
-      background: rgba(0,0,0,0.65);
+      background: rgba(4,6,12,0.78);
       transform-origin: bottom center;
       transition: transform 0.1s linear;
     }
+
     .cd-label {
-      font-family: var(--font-mono);
-      font-size: 0.5rem;
-      color: var(--white-faint);
-      letter-spacing: 2px;
+      font-family: var(--font-label);
+      font-size: 0.46rem;
+      color: rgba(240,236,228,0.45);
+      letter-spacing: 3px;
       text-transform: uppercase;
     }
+
     .cd-timer {
       font-family: var(--font-mono);
-      font-size: 0.52rem;
-      color: var(--gold-dim);
+      font-size: 0.56rem;
+      color: var(--gold);
       min-height: 0.7rem;
       text-align: center;
+      letter-spacing: 1px;
     }
 
-    /* key binding hint strip */
     .cd-key {
       position: absolute;
-      bottom: 2px;
-      right: 3px;
+      bottom: 3px;
+      right: 4px;
       font-family: var(--font-mono);
-      font-size: 0.4rem;
-      color: rgba(255,255,255,0.3);
+      font-size: 0.42rem;
+      color: rgba(240,236,228,0.38);
+      z-index: 3;
     }
 
-    /* ── Kill feed — top-right ───────────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       KILL FEED — top-right
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-killfeed {
       position: absolute;
-      top: 24px;
-      right: 24px;
+      top: 28px;
+      right: 28px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 4px;
       align-items: flex-end;
       max-width: 300px;
     }
+
     .kf-entry {
-      background: var(--bg-deep);
+      background: rgba(4,6,12,0.92);
       border-right: 2px solid var(--gold);
-      padding: 5px 10px;
-      font-family: var(--font-mono);
+      padding: 6px 14px 6px 16px;
+      font-family: var(--font-label);
       font-size: 0.58rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
       color: var(--white-dim);
-      letter-spacing: 1px;
-      animation: kfSlide 0.25s ease;
+      animation: kfSlide 0.22s ease;
       white-space: nowrap;
     }
-    .kf-entry.villain-kill { border-color: var(--villain); }
-    .kf-entry.hero-kill    { border-color: var(--hero); }
+
+    .kf-entry.villain-kill { border-color: var(--villain); color: rgba(230,100,100,0.95); }
+    .kf-entry.hero-kill    { border-color: var(--hero);    color: rgba(100,190,220,0.95); }
+
     @keyframes kfSlide {
-      from { opacity: 0; transform: translateX(20px); }
+      from { opacity: 0; transform: translateX(18px); }
       to   { opacity: 1; transform: translateX(0); }
     }
     .kf-entry.fade-out {
-      animation: kfFade 0.5s ease forwards;
+      animation: kfFade 0.45s ease forwards;
     }
     @keyframes kfFade {
-      to { opacity: 0; transform: translateX(20px); }
+      to { opacity: 0; transform: translateX(14px); }
     }
 
-    /* ── Combat log — left panel, mid ────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       COMBAT LOG — left panel mid
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-combatlog {
       position: absolute;
       left: 28px;
       top: 50%;
       transform: translateY(-50%);
-      width: 220px;
+      width: 240px;
       display: flex;
       flex-direction: column;
       gap: 3px;
-      max-height: 180px;
+      max-height: 200px;
       overflow: hidden;
+      background: rgba(4,6,12,0.82);
+      border: 1px solid rgba(201,168,76,0.15);
+      border-left: 2px solid rgba(201,168,76,0.5);
+      padding: 12px 14px;
     }
+
     .log-header {
-      font-size: 0.42rem;
-      letter-spacing: 5px;
+      font-size: 0.46rem;
+      letter-spacing: 6px;
       text-transform: uppercase;
-      color: var(--gold-dim);
-      margin-bottom: 4px;
-      border-bottom: 1px solid rgba(201,168,76,0.15);
-      padding-bottom: 3px;
+      color: rgba(201,168,76,0.8);
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(201,168,76,0.22);
+      position: relative;
     }
+
+    .log-header::after {
+      content: '◆';
+      position: absolute;
+      right: 0; bottom: -5px;
+      font-size: 0.35rem;
+      color: var(--gold);
+      opacity: 0.6;
+    }
+
     .log-line {
       font-family: var(--font-mono);
-      font-size: 0.5rem;
-      color: var(--white-faint);
+      font-size: 0.56rem;
+      color: rgba(240,236,228,0.55);
       letter-spacing: 0.5px;
-      line-height: 1.4;
-      animation: logSlide 0.2s ease;
+      line-height: 1.55;
+      animation: logSlide 0.18s ease;
     }
     @keyframes logSlide {
-      from { opacity: 0; transform: translateX(-8px); }
+      from { opacity: 0; transform: translateX(-6px); }
       to   { opacity: 1; transform: translateX(0); }
     }
-    .log-line .log-attacker { color: var(--gold-dim); }
-    .log-line .log-dmg      { color: var(--red); }
-    .log-line .log-heal     { color: var(--green); }
-    .log-line .log-target   { color: var(--white-dim); }
+    .log-line .log-attacker { color: var(--gold-light); }
+    .log-line .log-dmg      { color: #f06060; }
+    .log-line .log-heal     { color: #60d060; }
+    .log-line .log-target   { color: rgba(240,236,228,0.8); }
 
-    /* ── State banner — center top ────────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       STATE BANNER — center top
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-banner {
       position: absolute;
       top: 0;
@@ -308,142 +425,233 @@
       text-align: center;
       pointer-events: none;
     }
+
     .banner-text {
       font-family: var(--font-head);
-      font-size: 1.1rem;
-      letter-spacing: 8px;
+      font-size: 1.15rem;
+      letter-spacing: 10px;
       text-transform: uppercase;
       color: var(--gold-light);
-      text-shadow: 0 0 30px rgba(201,168,76,0.6);
-      padding: 12px 32px;
-      background: linear-gradient(180deg, rgba(4,6,12,0.85) 0%, transparent 100%);
+      text-shadow:
+        0 0 32px rgba(201,168,76,0.8),
+        0 0 70px rgba(201,168,76,0.3),
+        0 2px 8px rgba(0,0,0,1);
+      padding: 16px 40px;
+      background: linear-gradient(180deg, rgba(4,6,12,0.95) 0%, rgba(4,6,12,0.4) 70%, transparent 100%);
       white-space: nowrap;
       opacity: 0;
-      transition: opacity 0.4s;
+      transition: opacity 0.38s;
+      display: inline-block;
     }
     .banner-text.visible { opacity: 1; }
 
-    /* ── Match Over overlay ──────────────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════════════════════════════
+       GAME OVER OVERLAY — full cinematic screen, menu-grade typography
+    ═══════════════════════════════════════════════════════════════════════ */
     #hud-gameover {
       position: fixed;
       inset: 0;
-      background: rgba(4,6,12,0);
+      /* Same layered atmosphere as menu body background */
+      background:
+        radial-gradient(ellipse 60% 55% at 72% 18%, rgba(220,160,60,0) 0%, transparent 65%),
+        rgba(4,6,12,0);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
+      gap: 18px;
       z-index: 600;
       pointer-events: none;
-      transition: background 0.8s;
+      transition: background 0.9s;
     }
+
     #hud-gameover.active {
-      background: rgba(4,6,12,0.82);
+      background:
+        radial-gradient(ellipse 60% 55% at 72% 18%, rgba(220,160,60,0.12) 0%, transparent 65%),
+        rgba(4,6,12,0.88);
       pointer-events: all;
     }
+
+    /* Thin vertical accent left of game-over content */
+    #hud-gameover.active::before {
+      content: '';
+      position: absolute;
+      left: calc(50% - 180px);
+      top: 28%;
+      height: 44%;
+      width: 1px;
+      background: linear-gradient(180deg, transparent, var(--gold), transparent);
+      opacity: 0.5;
+    }
+
     .go-title {
       font-family: var(--font-head);
-      font-size: clamp(2rem, 5vw, 3.8rem);
-      letter-spacing: 12px;
+      font-size: clamp(2rem, 5vw, 3.6rem);
+      letter-spacing: 10px;
       text-transform: uppercase;
       opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 0.6s 0.3s, transform 0.6s 0.3s;
+      transform: translateY(28px);
+      transition: opacity 0.65s 0.3s, transform 0.65s 0.3s;
     }
-    .go-title.hero-win    { color: var(--hero);    text-shadow: 0 0 60px rgba(76,168,201,0.6); }
-    .go-title.villain-win { color: var(--villain); text-shadow: 0 0 60px rgba(201,76,76,0.6); }
+
+    .go-title.hero-win {
+      color: var(--gold-light);
+      text-shadow:
+        0 0 40px rgba(232,201,106,0.6),
+        0 0 80px rgba(232,201,106,0.2);
+    }
+    .go-title.villain-win {
+      color: var(--villain);
+      text-shadow: 0 0 50px rgba(201,76,76,0.65);
+    }
+
     #hud-gameover.active .go-title {
       opacity: 1;
       transform: translateY(0);
     }
+
     .go-sub {
       font-family: var(--font-label);
-      font-size: 0.7rem;
-      letter-spacing: 5px;
+      font-size: 0.66rem;
+      letter-spacing: 6px;
       color: var(--white-faint);
       text-transform: uppercase;
       opacity: 0;
       transition: opacity 0.6s 0.7s;
     }
     #hud-gameover.active .go-sub { opacity: 1; }
+
     .go-duration {
       font-family: var(--font-mono);
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       color: var(--gold-dim);
-      letter-spacing: 4px;
+      letter-spacing: 5px;
       opacity: 0;
       transition: opacity 0.4s 1s;
     }
     #hud-gameover.active .go-duration { opacity: 1; }
+
+    /* Horizontal gold rule — like menu's gradient accent */
+    .go-rule {
+      width: 140px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0.55;
+    }
+
     .go-stats {
       display: flex;
-      gap: 48px;
+      gap: 52px;
       opacity: 0;
       transition: opacity 0.4s 1.1s;
-      margin-top: 12px;
+      margin-top: 10px;
     }
     #hud-gameover.active .go-stats { opacity: 1; }
+
     .go-stat-item {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
     }
+
     .go-stat-val {
       font-family: var(--font-head);
-      font-size: 1.6rem;
+      font-size: 1.55rem;
       color: var(--gold-light);
+      text-shadow: 0 0 24px rgba(201,168,76,0.4);
     }
+
     .go-stat-label {
-      font-size: 0.45rem;
-      letter-spacing: 4px;
+      font-size: 0.42rem;
+      letter-spacing: 5px;
       text-transform: uppercase;
       color: var(--white-faint);
     }
-    .go-rule {
-      width: 120px;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--gold), transparent);
-      opacity: 0.5;
-    }
+
+    /* Return button — styled exactly like menu's .menu-btn */
     .go-btn {
+      position: relative;
+      padding: 10px 0;
       font-family: var(--font-label);
-      font-size: 0.65rem;
-      letter-spacing: 4px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: 3px;
       text-transform: uppercase;
       background: transparent;
-      border: 1px solid rgba(201,168,76,0.4);
-      color: var(--gold-light);
-      padding: 12px 32px;
+      border: none;
+      color: var(--white-dim);
       cursor: pointer;
-      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      text-align: left;
+      min-width: 220px;
+      transition: color 0.2s ease, letter-spacing 0.2s ease;
       pointer-events: all;
       opacity: 0;
-      transition: opacity 0.4s 1.4s, border-color 0.2s, box-shadow 0.2s;
-    }
-    #hud-gameover.active .go-btn { opacity: 1; }
-    .go-btn:hover {
-      border-color: var(--gold);
-      box-shadow: 0 0 20px rgba(201,168,76,0.3);
-      background: rgba(201,168,76,0.06);
+      /* two transitions: fade-in delay + hover effects */
+      animation: none;
     }
 
-    /* ── Damage numbers ─────────────────────────────────────────────────── */
+    #hud-gameover.active .go-btn {
+      animation: goFadeIn 0.4s 1.4s ease both;
+    }
+    @keyframes goFadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Left accent bar (menu ::before) */
+    .go-btn::before {
+      content: '';
+      position: absolute;
+      left: -14px; top: 50%;
+      transform: translateY(-50%) scaleY(0);
+      width: 2px; height: 60%;
+      background: var(--gold);
+      transition: transform 0.18s ease;
+      transform-origin: center;
+    }
+
+    /* Underline (menu ::after) */
+    .go-btn::after {
+      content: '';
+      position: absolute;
+      bottom: 6px; left: 0;
+      width: 0; height: 1px;
+      background: linear-gradient(90deg, var(--gold), transparent);
+      transition: width 0.22s ease;
+    }
+
+    .go-btn:hover {
+      color: var(--gold-light);
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px rgba(201,168,76,0.45);
+    }
+    .go-btn:hover::before { transform: translateY(-50%) scaleY(1); }
+    .go-btn:hover::after  { width: 100%; }
+    .go-btn:active {
+      color: var(--white);
+      transform: translateX(2px);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       FLOATING DAMAGE NUMBERS
+    ═══════════════════════════════════════════════════════════════════════ */
     .dmg-float {
       position: fixed;
       font-family: var(--font-head);
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 700;
       pointer-events: none;
       z-index: 550;
-      animation: floatUp 0.9s ease forwards;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+      animation: floatUp 0.95s ease forwards;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.9);
     }
-    .dmg-float.dmg  { color: var(--red);   }
-    .dmg-float.heal { color: var(--green); font-size: 0.85rem; }
+    .dmg-float.dmg  { color: var(--red); }
+    .dmg-float.heal { color: var(--green); font-size: 0.82rem; }
     @keyframes floatUp {
-      0%   { opacity: 1;   transform: translateY(0); }
-      100% { opacity: 0;   transform: translateY(-52px); }
+      0%   { opacity: 1;   transform: translateY(0) scale(1); }
+      15%  { opacity: 1;   transform: translateY(-8px) scale(1.12); }
+      100% { opacity: 0;   transform: translateY(-54px) scale(0.9); }
     }
   `;
   document.head.appendChild(style);
