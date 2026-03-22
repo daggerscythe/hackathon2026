@@ -1,14 +1,42 @@
 const http    = require("http");
 const express = require("express");
 const path    = require("path");
+const os = require("os");
 const { server: WebSocketServer } = require("websocket");
 
 // ── HTTP server (serves static game files) ────────────────────────────────
 const app = express();
-app.use(express.static(__dirname));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "menu.html")));
-app.listen(9091, () => console.log("HTTP  → http://localhost:9091"));
+const uiPath = path.join(__dirname, "../UI");
 
+app.use(express.static(uiPath));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(uiPath, "menu.html"));
+});
+function getLocalIp() {
+  const nets = os.networkInterfaces();
+
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      const isIPv4 = net.family === "IPv4" || net.family === 4;
+      if (isIPv4 && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+
+  return "localhost";
+}
+
+const PORT = 9091;
+const HOST = "0.0.0.0";
+
+app.listen(PORT, HOST, () => {
+  const localIp = getLocalIp();
+
+  console.log(`HTTP  → http://localhost:${PORT}`);
+  console.log(`LAN   → http://${localIp}:${PORT}`);
+});
 // ── WebSocket server ──────────────────────────────────────────────────────
 const httpServer = http.createServer();
 httpServer.listen(9090, () => console.log("WebSocket → ws://localhost:9090"));
