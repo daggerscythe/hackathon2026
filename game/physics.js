@@ -101,8 +101,6 @@ AFRAME.registerComponent('player-physics', {
 
 // ============================================
 // MELEE HITBOX COMPONENT
-// Spawns a visible collision box in front of
-// the player on attack, despawns after duration
 // ============================================
 AFRAME.registerComponent('melee-hitbox', {
   schema: {
@@ -123,33 +121,6 @@ AFRAME.registerComponent('melee-hitbox', {
   spawn() {
     if (this.active) return; // prevent spam
     this.active = true;
-
-    // // get player's world position and facing direction
-    // const playerPos  = this.el.object3D.position;
-    // const worldQuat  = new THREE.Quaternion();
-    // this.el.object3D.getWorldQuaternion(worldQuat);
-    // const forward    = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
-
-    // // place hitbox 1 unit in front of player in world space
-    // const hitPos = new THREE.Vector3(
-    //     playerPos.x + forward.x * 1.0,
-    //     playerPos.y + 1.0,
-    //     playerPos.z + forward.z * 1.0,
-    // );
-
-    // // create a box in front of the player
-    // const box = document.createElement('a-box');
-    // box.setAttribute('width',    '1.2');
-    // box.setAttribute('height',   '1.2');
-    // box.setAttribute('depth',    '0.8');
-    // box.setAttribute('position', `${hitPos.x} ${hitPos.y} ${hitPos.z}`);
-    // box.setAttribute('color',    '#ffff00');
-    // box.setAttribute('opacity',  '0.3');         // semi-transparent so you can see it
-
-    // // append to SCENE, not player entity
-    // const scene = document.querySelector('a-scene');
-    // scene.appendChild(box);
-    // this.hitbox = box;
 
     // check for hits while active
     this.checkHits();

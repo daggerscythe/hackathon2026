@@ -39,7 +39,6 @@ const wsServer  = new WebSocketServer({ httpServer: lobbyHttp });
 
 const clients = {};
 const games   = {};
-const COLORS      = ['Red', 'Green', 'Blue', 'Yellow'];
 const MAX_PLAYERS = 4;
 const MIN_START   = 2;
 
@@ -57,7 +56,6 @@ function publicGame(game) {
     players: game.players.map(p => ({
       clientId:  p.clientId,  // add this
       username:  p.username,
-      color:     p.color,
       ready:     p.ready,
       character: p.character,
       spawnX:    p.spawnX ?? 0,   // NEW CODE
@@ -100,10 +98,10 @@ wsServer.on('request', request => {
 
     if (msg.method === 'create') {
       const pin  = makePin();
-      games[pin] = { id: pin, players: [{ clientId, username: client.username || 'Host', color: COLORS[0], ready: false, character: null }] };
+      games[pin] = { id: pin, players: [{ clientId, username: client.username || 'Host', ready: false, character: null }] };
       const pg   = publicGame(games[pin]);
       send(conn, { method: 'create', gameId: pin, game: pg });
-      send(conn, { method: 'join',   gameId: pin, game: pg, yourColor: COLORS[0] });
+      send(conn, { method: 'join',   gameId: pin, game: pg });
     }
 
     if (msg.method === 'join') {
@@ -112,11 +110,10 @@ wsServer.on('request', request => {
       if (!game)                                           { send(conn, { method: 'error', message: 'Room not found.' }); return; }
       if (game.players.length >= MAX_PLAYERS)              { send(conn, { method: 'error', message: 'Room is full.' }); return; }
       if (game.players.find(p => p.clientId === clientId)) { send(conn, { method: 'error', message: 'Already in room.' }); return; }
-      const color = COLORS[game.players.length];
-      game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
+      game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, ready: false, character: null });
       const pg = publicGame(game);
       broadcast(game, { method: 'join',   gameId: pin, game: pg });
-      send(conn,  { method: 'joined', gameId: pin, game: pg, yourColor: color });
+      send(conn,  { method: 'joined', gameId: pin, game: pg });
     }
 
     if (msg.method === 'ready') {
@@ -207,7 +204,6 @@ wsServer.on('request', request => {
           game.players.push({
             clientId: existingId,
             username: msg.username || existingId,
-            color:    'White',
             ready:    true,
             character: null,
           });

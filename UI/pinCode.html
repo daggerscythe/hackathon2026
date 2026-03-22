@@ -928,7 +928,7 @@
     function goBack() { window.location.href = 'mode-select.html'; }
 
     // ══════════════════════════════════════════════════════════════════════
-    // THREE.JS BACKGROUND (crown — unchanged from original)
+    // THREE.JS BACKGROUND (crown)
     // ══════════════════════════════════════════════════════════════════════
     const canvas   = document.getElementById('bg-canvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -936,7 +936,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     const bgScene  = new THREE.Scene();
     const bgCamera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
-    bgCamera.position.set(0, 0, 14);
+    bgCamera.position.set(0, 1, 14);
 
     const wireBright = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.18 });
     const wireMid    = new THREE.MeshBasicMaterial({ color: 0xd4b86a, wireframe: true, transparent: true, opacity: 0.10 });
@@ -957,7 +957,8 @@
     const baseRing = new THREE.Mesh(new THREE.TorusGeometry(1.85, 0.07, 5, 32), wireBright);
     baseRing.rotation.x = Math.PI*0.5; baseRing.position.y = -0.3;
     crownGroup.add(baseRing);
-    crownGroup.position.set(0, 0.5, -8); // centered behind both panels
+    crownGroup.position.set(5, -8, -10);
+    crownGroup.scale.set(3, 3, 3);
     bgScene.add(crownGroup);
 
     const floaters = [];
