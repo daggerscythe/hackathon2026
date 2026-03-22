@@ -124,11 +124,10 @@ Characters are classified at load time by their stats. A player picks a class du
 ## Team
 | Name | Role |
 |------|------|
-| Earnest | UI |
-| Bisesh | 3D Models |
-| Dani | Game Logic |
-| Ember | CSV Integration |
-| Remaining | Multiplayer (WebSockets) |
+| Earnest | UI & Multiplayer (WebSockets) |
+| Bisesh | 3D Models & Sound Design |
+| Dani | Game Logic & Scripting |
+| Ember | CSV Integration & Multiplayer (WebSockets) |
  
 ---
     
