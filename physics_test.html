@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Physics Test</title>
+
+  <!-- A-Frame physics system with BufferGeometry support -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.4/dist/aframe-physics-system.min.js"></script>
+    <script>
+    // ============================================
+    // PLAYER PHYSICS COMPONENT
+    // handles WASD movement and jumping
+    // ============================================
+    AFRAME.registerComponent('player-physics', {
+
+      init() {
+        this.el.addEventListener('body-loaded', () => {
+            console.log('physics body ready!');
+        });
+        this.keys        = {};
+        this.canJump     = false; // only jump when on the ground
+        this.speed       = 5;
+        this.jumpForce   = 7;
+
+        // track keys
+        this.onKeyDown = (e) => {
+          this.keys[e.code] = true;
+
+          // jump on Space
+          if (e.code === 'Space' && this.canJump) {
+            this.jump();
+          }
+        };
+        this.onKeyUp = (e) => { this.keys[e.code] = false; };
+
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup',   this.onKeyUp);
+
+        // collision listener — when player hits something check if it's below us
+        this.el.addEventListener('collide', (e) => {
+          this.onCollide(e);
+        });
+      },
+
+      jump() {
+        const body = this.el.components['dynamic-body'].body;
+        if (!body) return;
+
+        // apply an upward impulse at the player's center
+        body.velocity.set(0, this.jumpForce, 0);
+        this.canJump = false;
+        this.jumping = true;
+
+        console.log('jumped!');
+      },
+
+      onCollide(e) {
+        // check if what we hit is below us (i.e. the floor or a platform)
+        // by comparing contact normal — if Y is pointing up, we landed
+        const contact = e.detail.contact;
+        if (!contact) return;
+
+        const normal = contact.ni; // collision normal vector
+
+        // if the normal is pointing mostly upward, we're standing on something
+        if (normal.y > 0.5) {
+          this.canJump = true;
+          this.jumping = false;
+        }
+      },
+
+      tick(time, delta) {
+        const bodyComponent = this.el.components['dynamic-body'];
+        if (!bodyComponent || !bodyComponent.body) return; // not ready yet
+
+        const body = this.el.components['dynamic-body']?.body;
+        if (!body) return;
+
+        // extract yaw from camera's look-controls rotation
+        const camera = document.getElementById('main-camera');
+        const worldQuat = new THREE.Quaternion();
+        camera.object3D.getWorldQuaternion(worldQuat);
+        const euler = new THREE.Euler();
+        euler.setFromQuaternion(camera.object3D.quaternion, 'YXZ');
+        const angle = euler.y;
+
+        const moveX   = (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0);
+        const moveZ   = (this.keys['KeyS'] ? 1 : 0) - (this.keys['KeyW'] ? 1 : 0);
+
+        // rotate movement vector by camera's look direction
+        const vx = moveX * Math.cos(angle) + moveZ * Math.sin(angle);
+        const vz = -moveX * Math.sin(angle) + moveZ * Math.cos(angle);
+
+        const spd = this.speed * (delta / 1000) * 60;
+        body.velocity.x = vx * spd;
+        body.velocity.z = vz * spd;
+
+        // check if we're actually still on the ground by seeing if
+        // the body is barely moving vertically — if we're floating,
+        // gravity should be pulling us down already
+        const isFalling = body.velocity.y < -0.1;
+        if (isFalling) {
+            this.canJump   = false;
+            this.jumping   = false;
+        }
+        
+        if (this.canJump && !this.jumping) {
+            body.velocity.y = Math.max(body.velocity.y, 0);
+        }
+
+        // keep player upright — physics can tip the body over without this
+        body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
+      },
+
+      remove() {
+        window.removeEventListener('keydown', this.onKeyDown);
+        window.removeEventListener('keyup',   this.onKeyUp);
+      },
+    });
+    </script>
+
+</head>
+<body>
+
+  <a-scene physics="gravity: -9.8; debug: true">
+
+    <a-assets></a-assets>
+
+    <!-- Sky -->
+    <a-sky color="#87CEEB"></a-sky>
+
+    <!-- Lighting -->
+    <a-entity light="type: ambient; intensity: 0.5"></a-entity>
+    <a-entity light="type: directional; intensity: 0.8" position="5 10 5"></a-entity>
+
+    <!-- Floor — static-body means physics knows it exists but it doesn't move -->
+    <a-box
+      id="floor"
+      position="0 -0.05 0"
+      width="40" height="0.1" depth="40"
+      color="#4a7c3f"
+      static-body="shape: box"
+    ></a-box>
+
+    <!-- Box to jump on -->
+    <a-box
+      id="platform"
+      position="3 0.5 -3"
+      width="3" height="1" depth="3"
+      color="#8B4513"
+      static-body="shape: box"
+    ></a-box>
+
+    <!-- Player — dynamic-body means physics moves it and it collides with things -->
+    <a-entity
+      id="player"
+      position="0 2 0"
+      dynamic-body="mass: 5; linearDamping: 0.99; angularDamping: 1.0, sleepSpeedLimit: 0.1"
+      player-physics
+    >
+      <!-- visible body -->
+      <a-box
+        width="0.8"
+        height="1.8"
+        depth="0.4"
+        color="#2980b9"
+        position="0 0.9 0"
+      ></a-box>
+
+      <!-- camera sits at head height -->
+      <a-camera
+        id="main-camera"
+        position="0 1.6 0"
+        look-controls="pointerLockEnabled: true"
+        wasd-controls="enabled: false"
+      ></a-camera>
+    </a-entity>
+
+  </a-scene>
+
+</body>
+</html>

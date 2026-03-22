@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hackathon Game</title>
 
+  <!-- A-Frame Physics plugin -->
+  <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-physics-system@v4.0.1/dist/aframe-physics-system.min.js"></script>
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
@@ -30,21 +32,24 @@
     id="main-scene"
     renderer="antialias: true"
     shadow="type: pcfsoft"
+    physics="gravity: -9.8; debug: true"
   >
+  
 
     <!-- Assets -->
     <a-assets>
-      <a-asset-item id="arena" src="models/low_poly_landscape.glb"></a-asset-item>
+      <a-asset-item id="arena" src="assets/models/low_poly_landscape.glb"></a-asset-item>
+      <img id="sky" src="assets/textures/sky.jpg"/>
     </a-assets>
 
-
+    <a-sky src="#sky"></a-sky>
     <!-- Stage / Map -->
     <a-entity id="stage">
       <a-gltf-model
         src="#arena"
-        position="40 0 -375"
-        rotation="0 0 0"
-        scale="10 10 10"
+        position="-200 0 -100"
+        rotation="0 40 0"
+        scale="5 5 5"
       ></a-gltf-model>
     </a-entity>
 
