@@ -177,6 +177,42 @@
     .connection-status.connected { color: rgba(93,232,93,0.7); }
     .connection-status.error     { color: rgba(232,112,112,0.7); }
 
+    /* ── Character picker ────────────────────────────────────────────────── */
+    .char-label {
+      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--gold-dim); margin-bottom: 8px;
+    }
+    .char-picker { display: flex; gap: 10px; margin-bottom: 18px; }
+    .char-btn {
+      font-family: 'Cinzel', serif; font-size: 0.65rem;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: rgba(201,168,76,0.06);
+      border: 1px solid rgba(201,168,76,0.25);
+      color: var(--white-faint); padding: 10px 18px;
+      cursor: pointer; transition: all 0.18s; flex: 1;
+    }
+    .char-btn:hover { border-color: var(--gold); color: var(--white); }
+    .char-btn.selected {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.15);
+      color: var(--gold-light);
+      box-shadow: 0 0 10px rgba(201,168,76,0.2);
+    }
+
+    /* ── Ready state on player slots ─────────────────────────────────────── */
+    .player-slot.ready {
+      border-color: rgba(93,232,93,0.4);
+      background: rgba(93,232,93,0.05);
+    }
+    .player-slot.ready .player-dot {
+      background: rgba(93,232,93,0.9);
+      box-shadow: 0 0 8px rgba(93,232,93,0.6);
+    }
+    .ready-badge {
+      font-size: 0.48rem; letter-spacing: 2px; text-transform: uppercase;
+      color: rgba(93,232,93,0.7); margin-left: auto; flex-shrink: 0;
+    }
+
     @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
   </style>
 </head>
@@ -188,8 +224,8 @@
 
     <!-- ── SCREEN 1: Enter username + choose host or join ─────────────── -->
     <div class="screen active" id="screen-entry">
-      <p class="section-label">— Enter your name</p>
-      <h1 class="join-url">mygame.tv</h1>
+      <p class="section-label">— Oh Troubled One,</p>
+      <h2 class="join-url">Enter Your Name</h2>
       <p class="join-sub">Identify yourself, adventurer</p>
 
       <input class="rpg-input" id="username-input" type="text"
@@ -248,6 +284,12 @@
       <div class="room-code" id="room-code-display">····</div>
       <div class="room-code-rule"></div>
 
+      <p class="char-label">— Choose your side</p>
+      <div class="char-picker" id="char-picker">
+        <button class="char-btn" onclick="selectCharacter('Hero')">⚔ Hero</button>
+        <button class="char-btn" onclick="selectCharacter('Villain')">💀 Villain</button>
+      </div>
+
       <p class="players-label">— Adventurers</p>
       <div class="player-list" id="player-list"></div>
 
@@ -255,8 +297,9 @@
 
       <div class="action-row">
         <button class="menu-btn secondary" onclick="leaveLobby()">← Leave</button>
-        <button class="menu-btn" id="start-btn" onclick="startGame()" style="display:none">Begin →</button>
-        <span class="start-hint" id="start-hint">Waiting for players…</span>
+        <button class="menu-btn" id="ready-btn" onclick="toggleReady()">Ready Up ✓</button>
+        <button class="menu-btn" id="start-btn" onclick="startGame()" style="display:none">Force Start →</button>
+        <span class="start-hint" id="start-hint">Choose your side…</span>
       </div>
     </div>
 
@@ -276,12 +319,14 @@
   <script>
 
     // ── State ─────────────────────────────────────────────────────────────
-    let clientId   = null;
-    let ws         = null;
-    let username   = '';
+    let clientId      = null;
+    let ws            = null;
+    let username      = '';
     let currentGameId = null;
-    let isHost     = false;
-    let serverIP   = 'localhost';
+    let isHost        = false;
+    let serverIP      = 'localhost';
+    let myCharacter   = null;
+    let myReady       = false;
 
     const MAX_PLAYERS = 6;
     const MIN_START   = 2;
@@ -362,7 +407,11 @@
           break;
 
         case 'start':
-          window.location.href = 'characterSelection.html';
+          window.location.href = '../index.html';
+          break;
+
+        case 'ready':
+          if (msg.game) renderLobby(msg.game);
           break;
 
         case 'playerLeft':
@@ -377,9 +426,35 @@
       }
     }
 
+    // ── Character selection ───────────────────────────────────────────────
+    function selectCharacter(name) {
+      myCharacter = name;
+      document.querySelectorAll('.char-btn').forEach(b => {
+        b.classList.toggle('selected', b.textContent.includes(name));
+      });
+      document.getElementById('start-hint').innerHTML = `<span>${name}</span> — click Ready Up`;
+      clearErrors();
+    }
+
+    // ── Ready up / unready ────────────────────────────────────────────────
+    function toggleReady() {
+      if (!myCharacter) {
+        showError('lobby-error', 'Choose Hero or Villain before readying up.');
+        return;
+      }
+      clearErrors();
+      myReady = !myReady;
+      const btn = document.getElementById('ready-btn');
+      btn.textContent = myReady ? 'Unready ✗' : 'Ready Up ✓';
+      btn.style.opacity = myReady ? '0.6' : '1';
+      sendWS({ method: 'ready', gameId: currentGameId, character: myCharacter });
+    }
+
     // ── Host a new game ───────────────────────────────────────────────────
     function hostGame() {
       isHost = true;
+      myCharacter = null;
+      myReady = false;
       serverIP = 'localhost';
       clearErrors();
       buildEmptySlots();
@@ -388,7 +463,6 @@
 
       connectWS('localhost', () => {
         sendWS({ method: 'create', clientId, username });
-        // Show start button only for host
         document.getElementById('start-btn').style.display = 'inline';
       });
     }
@@ -405,6 +479,8 @@
       }
 
       isHost = false;
+      myCharacter = null;
+      myReady = false;
       buildEmptySlots();
 
       connectWS(ip, () => {
@@ -449,29 +525,29 @@
       const players = game.players || [];
       const list = document.getElementById('player-list');
 
-      // Rebuild slots
       list.innerHTML = '';
       for (let i = 0; i < MAX_PLAYERS; i++) {
         const p = players[i];
         const slot = document.createElement('div');
-        slot.className = 'player-slot' + (p ? ' filled' : '');
+        slot.className = 'player-slot' + (p ? ' filled' : '') + (p?.ready ? ' ready' : '');
         slot.innerHTML = `
           <div class="player-dot"></div>
           <span class="player-name-text">${p ? p.username : 'Awaiting…'}</span>
-          <span class="player-color-badge">${p ? p.color : ''}</span>
+          ${p ? `<span class="ready-badge">${p.ready ? '✓ Ready' : '…'}</span>` : ''}
         `;
         list.appendChild(slot);
       }
 
       updateCount(players.length);
 
-      // Update hint
-      const hint = document.getElementById('start-hint');
-      const needed = Math.max(0, MIN_START - players.length);
-      if (needed <= 0) {
-        hint.innerHTML = isHost ? `<span>Ready — click Begin</span>` : `<span>Waiting for host…</span>`;
-      } else {
+      const readyCount = players.filter(p => p.ready).length;
+      const needed     = Math.max(0, MIN_START - players.length);
+      const hint       = document.getElementById('start-hint');
+
+      if (needed > 0) {
         hint.innerHTML = `Waiting for <span>${needed}</span> more`;
+      } else if (myReady) {
+        hint.innerHTML = `<span>${readyCount}/${players.length}</span> ready`;
       }
     }
 

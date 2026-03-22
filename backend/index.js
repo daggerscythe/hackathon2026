@@ -20,8 +20,9 @@ const clients = {};
 // gameId (4-char PIN) → { id, players: [{clientId, username, color}] }
 const games = {};
 
-const COLORS     = ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"];
+const COLORS      = ["Red", "Green", "Blue", "Yellow", "Purple", "Orange"];
 const MAX_PLAYERS = 6;
+const MIN_START   = 2;
 
 // ── Helper: send JSON to a single connection ──────────────────────────────
 function send(conn, payload) {
@@ -40,7 +41,7 @@ function broadcast(game, payload) {
 function publicGame(game) {
   return {
     id:      game.id,
-    players: game.players.map(p => ({ username: p.username, color: p.color })),
+    players: game.players.map(p => ({ username: p.username, color: p.color, ready: p.ready, character: p.character })),
   };
 }
 
@@ -97,7 +98,7 @@ wsServer.on("request", request => {
     if (method === "create") {
       const pin   = makePin();
       const color = COLORS[0];
-      games[pin]  = { id: pin, players: [{ clientId, username: client.username || "Host", color }] };
+      games[pin]  = { id: pin, players: [{ clientId, username: client.username || "Host", color, ready: false, character: null }] };
 
       const pg = publicGame(games[pin]);
       send(conn, { method: "create", gameId: pin, game: pg });
@@ -123,18 +124,38 @@ wsServer.on("request", request => {
       }
 
       const color = COLORS[game.players.length];
-      game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color });
+      game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
 
       const pg = publicGame(game);
       broadcast(game, { method: "join",   gameId: pin, game: pg });
       send(conn,       { method: "joined", gameId: pin, game: pg, yourColor: color });
     }
 
-    // when method is start, start the game
+    // ── READY: toggle ready + save Hero/Villain choice ───────────────────
+    if (method === "ready") {
+      const game = games[msg.gameId];
+      if (!game) return;
+      const player = game.players.find(p => p.clientId === clientId);
+      if (!player) return;
+
+      player.ready     = !player.ready;
+      player.character = msg.character || player.character;
+
+      const pg = publicGame(game);
+      broadcast(game, { method: "ready", game: pg });
+
+      // Auto-start when all players (≥ MIN_START) are ready
+      const allReady = game.players.length >= MIN_START && game.players.every(p => p.ready);
+      if (allReady) {
+        broadcast(game, { method: "start", game: pg });
+      }
+    }
+
+    // ── START: host force-start override ────────────────────────────────
     if (method === "start") {
       const game = games[msg.gameId];
       if (!game) return;
-      if (game.players[0]?.clientId !== clientId) return; // only host can start
+      if (game.players[0]?.clientId !== clientId) return;
       broadcast(game, { method: "start", game: publicGame(game) });
     }
   });
