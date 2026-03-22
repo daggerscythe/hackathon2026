@@ -675,9 +675,10 @@ let   _localCharId = null;           // set once we know local player
 
 // Cooldown tracking for the HUD (mirrors game.js but we only read it here)
 const CD_CONFIG = {
-  magic: { label: 'Magic',  key: 'RMB', icon: '🔮', duration: 3000 },
-  heal:  { label: 'Heal',   key: 'H',   icon: '💚', duration: 5000 },
-  melee: { label: 'Melee',  key: 'LMB', icon: '⚔️',  duration: 0    },
+  magic:     { label: 'Magic',      key: 'LMB', icon: '🔮', duration: 3000 },
+  heal_ally: { label: 'Heal Ally',  key: 'LMB', icon: '❤️',  duration: 5000 },
+  heal_self: { label: 'Heal Self',  key: 'RMB', icon: '💚', duration: 5000 },
+  melee:     { label: 'Melee',      key: 'LMB', icon: '⚔️',  duration: 0    },
 };
 
 const _cdTimers  = {};   // ability → { lastUsed, intervalId }
@@ -756,29 +757,9 @@ function buildHUD() {
   hudHeroes.id = 'hud-heroes';
   hudRoot.appendChild(hudHeroes);
 
-  // ── Cooldown bar
+  // ── Cooldown bar — built later once we know the player's class
   hudCooldowns = document.createElement('div');
   hudCooldowns.id = 'hud-cooldowns';
-  ['melee','magic','heal'].forEach(ab => {
-    const cfg = CD_CONFIG[ab];
-    const slot = document.createElement('div');
-    slot.className = 'cd-slot';
-    slot.innerHTML = `
-      <div class="cd-icon ready" id="cd-icon-${ab}">
-        ${cfg.icon}
-        <div class="cd-sweep" id="cd-sweep-${ab}" style="transform:scaleY(0)"></div>
-        <span class="cd-key">${cfg.key}</span>
-      </div>
-      <div class="cd-label">${cfg.label}</div>
-      <div class="cd-timer" id="cd-timer-${ab}"></div>
-    `;
-    hudCooldowns.appendChild(slot);
-    _cdEls[ab] = {
-      sweep: slot.querySelector(`#cd-sweep-${ab}`),
-      timer: slot.querySelector(`#cd-timer-${ab}`),
-      icon:  slot.querySelector(`#cd-icon-${ab}`),
-    };
-  });
   hudRoot.appendChild(hudCooldowns);
 
   // ── Kill feed
@@ -817,6 +798,47 @@ function buildHUD() {
     <button class="go-btn" onclick="UI.onPlayAgain()">← Return to Menu</button>
   `;
   document.body.appendChild(hudGameover);
+}
+
+function buildCooldownSlots(chosenClass) {
+  hudCooldowns.innerHTML = '';
+  Object.keys(_cdEls).forEach(k => delete _cdEls[k]);
+
+  const magicClasses   = ['mage', 'villain_mage'];
+  const supportClasses = ['support'];
+
+  let abilities = [];
+
+  if (magicClasses.includes(chosenClass)) {
+    // mage: only magic on LMB
+    abilities = ['magic'];
+  } else if (supportClasses.includes(chosenClass)) {
+    abilities = ['heal_ally', 'heal_self'];
+  } else {
+    // tank, dps, brute, agile: only melee on LMB
+    abilities = ['melee'];
+  }
+
+  abilities.forEach(ab => {
+    const cfg  = CD_CONFIG[ab];
+    const slot = document.createElement('div');
+    slot.className = 'cd-slot';
+    slot.innerHTML = `
+      <div class="cd-icon ready" id="cd-icon-${ab}">
+        ${cfg.icon}
+        <div class="cd-sweep" id="cd-sweep-${ab}" style="transform:scaleY(0)"></div>
+        <span class="cd-key">${cfg.key}</span>
+      </div>
+      <div class="cd-label">${cfg.label}</div>
+      <div class="cd-timer" id="cd-timer-${ab}"></div>
+    `;
+    hudCooldowns.appendChild(slot);
+    _cdEls[ab] = {
+      sweep: slot.querySelector(`#cd-sweep-${ab}`),
+      timer: slot.querySelector(`#cd-timer-${ab}`),
+      icon:  slot.querySelector(`#cd-icon-${ab}`),
+    };
+  });
 }
 
 
@@ -1111,10 +1133,14 @@ function wireGameEvents() {
     showBanner('Battle!', 2000);
     startRoundTimer();
 
-    // Determine local player for cooldown tracking
-    // Heuristic: 'villain' id maps to the local villain entity
-    _localCharId = villainId; // default; override below if you store local id differently
-    startCooldownLoop(villainId);
+    // read local player's class from sessionStorage
+    const myClass = sessionStorage.getItem('selectedClass') || 'brute';
+    buildCooldownSlots(myClass);
+
+    _localCharId = sessionStorage.getItem('selectedRole') === 'villain'
+      ? 'villain'
+      : sessionStorage.getItem('clientId');
+    startCooldownLoop(_localCharId);
   });
 
   // Health changed

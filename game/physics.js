@@ -171,11 +171,19 @@ AFRAME.registerComponent('attack-input', {
     this.magicClasses = ['mage', 'villain_mage'];
 
     this.onMouseDown = (e) => {
-      if (e.button !== 0) return;
-      if (typeof isSpectating !== 'undefined' && isSpectating) return;
       if (getState() !== STATES.BATTLE) return;
+      if (typeof isSpectating !== 'undefined' && isSpectating) return;
 
-      const isMagic = this.magicClasses.includes(this.data.attackClass);
+      const isSupport = this.data.attackClass === 'support';
+      const isMagic   = this.magicClasses.includes(this.data.attackClass);
+
+      if (isSupport) {
+        if (e.button === 0) this.doHealAlly();  // LMB — heal teammate
+        if (e.button === 2) this.doHealSelf();  // RMB — heal self
+        return;
+      }
+
+      if (e.button !== 0) return; // non-support only uses LMB
       if (isMagic) {
         this.doMagic();
       } else {
@@ -183,27 +191,12 @@ AFRAME.registerComponent('attack-input', {
       }
     };
 
-    this.onHealKey = (e) => {
-      if (e.code !== 'KeyH') return;
-      if (typeof getState === 'function' && getState() !== STATES.BATTLE) return;
-      const charId = this.data.characterId;
-      const char   = characters.get(charId);
-      if (!char || !char.isAlive || char.role !== 'hero') return;
-      let nearestId = charId, nearestDist = Infinity;
-      characters.forEach(c => {
-        if (c.role !== 'hero' || !c.isAlive) return;
-        const el = document.getElementById(c.entityId);
-        if (!el) return;
-        const d = this.el.object3D.position.distanceTo(el.object3D.position);
-        if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
-      });
-      performHeal(charId, nearestId);
-    };
 
-    this.onContextMenu = (e) => e.preventDefault();
+    this.onContextMenu = (e) => {
+      if (this.data.attackClass !== 'support') e.preventDefault();
+    };
     window.addEventListener('mousedown',   this.onMouseDown);
     window.addEventListener('contextmenu', this.onContextMenu);
-    window.addEventListener('keydown',     this.onHealKey);
 
     // spawn permanent weapon after entity loads
     // this.el.addEventListener('loaded', () => {
@@ -280,9 +273,43 @@ AFRAME.registerComponent('attack-input', {
     return nearest;
   },
 
+  doHealAlly() {
+    const charId = this.data.characterId;
+    const char   = characters.get(charId);
+    if (!char || !char.isAlive) return;
+
+    // find nearest living hero that isn't self
+    let nearestId   = null;
+    let nearestDist = Infinity;
+    characters.forEach(c => {
+      if (c.id === charId)       return; // skip self
+      if (c.role !== 'hero')     return; // only heal heroes
+      if (!c.isAlive)            return;
+      const el = document.getElementById(c.entityId);
+      if (!el) return;
+      const d = this.el.object3D.position.distanceTo(el.object3D.position);
+      if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
+    });
+
+    if (!nearestId) {
+      console.log('[HEAL] No ally in range to heal');
+      return;
+    }
+
+    performHeal(charId, nearestId);
+  },
+
+  doHealSelf() {
+    const charId = this.data.characterId;
+    const char   = characters.get(charId);
+    if (!char || !char.isAlive) return;
+
+    // same id for both healer and healee = self heal
+    performHeal(charId, charId);
+  },
+
   remove() {
     window.removeEventListener('mousedown',   this.onMouseDown);
     window.removeEventListener('contextmenu', this.onContextMenu);
-    window.removeEventListener('keydown',     this.onHealKey);
   },
 });
