@@ -590,7 +590,7 @@ function performAttack(attackerId, defenderId, direction) {
 // =================================================
 const PROJECTILE_SPEED = 10;  // units per second
 const PROJECTILE_RANGE = 20;  // max distance before projectile disappears
-const MELEE_RANGE = 2;   // how close you need to be to melee
+const MELEE_RANGE = 4;   // how close you need to be to melee
 const CAMERA_OFFSET = { x: 0, y: 5, z: 10 }; // 3rd person offset
 
 // ============================================

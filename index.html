@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hackathon Game</title>
+  <title>Slaying The Goliath</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -13,6 +13,215 @@
   <script src="game/game.js"></script>
   <script src="game/physics.js"></script>
   <script src="UI/menu.js"></script>
+
+  <style>
+    /* Health bar styles — float above canvas */
+    .health-bar-container {
+      position: absolute;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+    }
+
+    .player-nickname {
+      color: white;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 4px #000, 0 0 8px #000;
+      margin-bottom: 3px;
+      white-space: nowrap;
+    }
+
+    .health-bar-bg {
+      width: 60px;
+      height: 6px;
+      background: #333;
+      border: 1px solid #000;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      background: #2ecc71;
+      transition: width 0.2s, background 0.2s;
+      border-radius: 2px;
+    }
+  </style>
+
+  <script>
+    // ============================================
+    // BILLBOARD HEALTH BAR COMPONENT
+    // Projects a world position to screen space
+    // and places an HTML health bar there
+    // ============================================
+    AFRAME.registerComponent('health-bar', {
+      schema: {
+        nickname: { type: 'string', default: 'Player' },
+        health:   { type: 'number', default: 100 },
+        maxHealth:{ type: 'number', default: 100 },
+      },
+
+      init() {
+        // create the HTML overlay element
+        this.container = document.createElement('div');
+        this.container.className = 'health-bar-container';
+        this.container.innerHTML = `
+          <div class="player-nickname">${this.data.nickname}</div>
+          <div class="health-bar-bg">
+            <div class="health-bar-fill" style="width:100%"></div>
+          </div>
+        `;
+        document.body.appendChild(this.container);
+
+        this.fill     = this.container.querySelector('.health-bar-fill');
+        this.nameEl   = this.container.querySelector('.player-nickname');
+        this.camera   = null;
+        this.renderer = null;
+
+        // listen for health changes from game.js
+        const id = this.el.getAttribute('id');
+        this.onHealthChanged = (e) => {
+            if (e.detail.characterId !== id) return;
+            this.updateHealth(e.detail.health, e.detail.maxHealth);
+        };
+
+        this.onDefeated = (e) => {
+          console.log('defeated event:', e.detail.characterId, 'my id:', id);
+          if (e.detail.characterId !== id) return;
+          this.container.style.display = 'none';
+        };
+        document.addEventListener('game:healthChanged',      this.onHealthChanged);
+        document.addEventListener('game:characterDefeated',  this.onDefeated);
+
+      },
+
+      // call this from game.js when health changes
+      updateHealth(health, maxHealth) {
+        const pct = Math.max(0, (health / maxHealth) * 100);
+        this.fill.style.width = `${pct}%`;
+
+        // color shifts green → yellow → red
+        if (pct > 60)      this.fill.style.background = '#2ecc71';
+        else if (pct > 30) this.fill.style.background = '#f39c12';
+        else               this.fill.style.background = '#e74c3c';
+      },
+
+      tick() {
+        // lazy-grab camera and renderer once scene is ready
+        if (!this.camera) {
+          const camEl = document.getElementById('main-camera');
+          if (!camEl || !camEl.object3D) return;
+          this.camera   = camEl.object3D;
+          this.renderer = this.el.sceneEl.renderer;
+        }
+
+        // world position — place bar above the entity's head
+        const worldPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(worldPos);
+        worldPos.y += 2.4; // float above head
+
+        // project to screen space
+        const canvas   = this.renderer.domElement;
+        const projected = worldPos.clone().project(
+          this.el.sceneEl.camera
+        );
+
+        const x = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
+        const y = (1 - (projected.y * 0.5 + 0.5)) * canvas.clientHeight;
+
+        // hide if behind camera
+        if (projected.z > 1) {
+          this.container.style.display = 'none';
+          return;
+        }
+
+        this.container.style.display = 'flex';
+        this.container.style.left    = `${x}px`;
+        this.container.style.top     = `${y}px`;
+      },
+
+      remove() {
+        document.removeEventListener('game:healthChanged',     this.onHealthChanged);
+        document.removeEventListener('game:characterDefeated', this.onDefeated);
+        if (this.container && this.container.parentNode) {
+            this.container.parentNode.removeChild(this.container);
+        }
+      },
+    });
+
+
+    // ============================================
+    // SPAWN HELPER — places models at random positions
+    // called after scene loads
+    // ============================================
+    function spawnPlaceholderPlayers() {
+      const scene = document.querySelector('a-scene');
+
+      const players = [
+        { id: 'npc-hero-1',    model: 'hero',    nickname: 'Wonder Hulk',     role: 'hero'    },
+        { id: 'npc-hero-2',    model: 'hero',    nickname: 'Super Girl',       role: 'hero'    },
+        { id: 'npc-hero-3',    model: 'hero',    nickname: 'Metal Knight',     role: 'hero'    },
+        { id: 'npc-villain',   model: 'villain', nickname: 'Professor Darkness', role: 'villain' },
+        { id: 'npc-mage',      model: 'mage',    nickname: 'Doctor X',         role: 'hero'    },
+        { id: 'npc-brute',     model: 'brute',   nickname: 'Omega Claw',       role: 'villain' },
+        { id: 'npc-agile',     model: 'agile',   nickname: 'Dark Daredevil',   role: 'hero'    },
+      ];
+
+      players.forEach(p => {
+        // random position on the green plane, away from center
+        const x = (Math.random() - 0.5) * 24;
+        const z = (Math.random() - 0.5) * 24;
+
+        const entity = document.createElement('a-entity');
+        entity.setAttribute('id', p.id);
+        entity.setAttribute('position', `${x} 2.2 ${z}`);
+        entity.setAttribute('health-bar', `nickname: ${p.nickname}; health: 100; maxHealth: 100`);
+
+        // load the GLB model
+        const model = document.createElement('a-gltf-model');
+        model.setAttribute('src', `assets/models/${p.model}.glb`);
+        model.setAttribute('scale', '0.8 0.8 0.8');
+        model.setAttribute('rotation', `0 ${Math.random() * 360} 0`); // random facing
+
+        entity.appendChild(model);
+        scene.appendChild(entity);
+
+        addCharacter(p.id, p.role, p.model, {
+          name:     p.nickname,
+          strength: 70,
+          magic:    60,
+          defense:  30,
+          speed:    50,
+          power:    40,
+        }, p.id);
+      });
+      // register local player
+      addCharacter('villain', 'villain', 'brute', {
+        name:     'You',
+        strength: 80,
+        magic:    75,
+        defense:  60,
+        speed:    50,
+        power:    20,
+      }, 'player-villain');
+
+      transitionTo(STATES.BATTLE);
+    }
+
+    // wait for scene to fully load before spawning
+    document.addEventListener('DOMContentLoaded', () => {
+      const scene = document.querySelector('a-scene');
+      if (scene.hasLoaded) {
+        spawnPlaceholderPlayers();
+      } else {
+        scene.addEventListener('loaded', spawnPlaceholderPlayers);
+      }
+    });
+  </script>
+
 </head>
 <body>
 
@@ -26,27 +235,34 @@
     >
 
     <!-- Assets -->
-    <a-assets>
-      <img id="sky" src="assets/textures/sky.jpg"/>
+    <a-assets timeout="10000">
+      <img id="sky"       src="assets/textures/sky.jpg"/>
       <img id="sky_night" src="assets/textures/sky_night.jpg"/>
+      <a-asset-item id="model-hero"    src="assets/models/hero.glb"></a-asset-item>
+      <a-asset-item id="model-villain" src="assets/models/villain.glb"></a-asset-item>
+      <a-asset-item id="model-mage"    src="assets/models/mage.glb"></a-asset-item>
+      <a-asset-item id="model-brute"   src="assets/models/brute.glb"></a-asset-item>
+      <a-asset-item id="model-agile"   src="assets/models/agile.glb"></a-asset-item>
+      <a-asset-item id="sword"    src="assets/models/sword.glb"></a-asset-item>
+      <a-asset-item id="fireball" src="assets/models/fireball.glb"></a-asset-item>
+      <a-asset-item id="arena" src="assets/models/arena.glb"></a-asset-item>
     </a-assets>
 
     <a-sky src="#sky_night"></a-sky>
 
     <!-- Stage / Map -->
     <a-entity id="stage">
-      <a-box
-        id="floor"
-        position="0 -0.05 0"
-        width="40" height="0.1" depth="40"
-        color="#4a7c3f"
-        static-body="shape: box"
-      ></a-box>
+      <a-gltf-model
+        src="#arena"
+        position="0 -0.3 0"
+        scale="1"
+      ></a-gltf-model>
 
+      <!-- keep the platform for now -->
       <a-box
         id="platform"
-        position="3 0.5 -3"
-        width="3" height="1" depth="3"
+        position="0 1 0"
+        width="30" height="0.5" depth="30"
         color="#8B4513"
         static-body="shape: box"
       ></a-box>
@@ -58,10 +274,7 @@
     <a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="5 10 5" shadow="cast: true"></a-entity>
 
 
-    <!--  Players  -->
-
-    <!-- Villain -->
-     
+    <!-- Local player — villain, controlled by physics -->
     <a-entity
       id="player-villain"
       class="player"
@@ -69,11 +282,19 @@
       position="0 2 0"
       dynamic-body="mass: 5; linearDamping: 0.99; angularDamping: 1.0"
       player-physics
+      attack-input="characterId: villain; attackClass: brute"
+      melee-hitbox="characterId: villain; duration: 300"
+      health-bar="nickname: You; health: 100; maxHealth: 100"
     >
-      <a-box color="#c0392b" width="0.8" height="1.8" depth="0.8" position="0 0.9 0"></a-box>
+      <a-gltf-model
+        id="villain-model"
+        src="#model-villain"
+        scale="0.8 0.8 0.8"
+        position="0 0 0"
+      ></a-gltf-model>
       <a-camera
         id="main-camera"
-        position="0 1.0 0"
+        position="0 3 0"
         look-controls="pointerLockEnabled: true"
         wasd-controls="enabled: false"
       ></a-camera>
@@ -82,4 +303,53 @@
   </a-scene>
 
 </body>
+
+<!-- TEMP TIMER — move to ui.js later  -->
+<div id="round-timer" style="
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 28px;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 8px #000;
+  z-index: 999;
+  pointer-events: none;
+">3:00</div>
+
+<script>
+  // TEMP — move to ui.js later
+  let timeLeft = 180; // 3 minutes in seconds
+  const timerEl = document.getElementById('round-timer');
+
+  function startRoundTimer() {
+    const interval = setInterval(() => {
+      timeLeft--;
+
+      const mins = Math.floor(timeLeft / 60);
+      const secs = timeLeft % 60;
+      timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+      // turn red in last 30 seconds
+      timerEl.style.color = timeLeft <= 30 ? '#e74c3c' : 'white';
+
+      if (timeLeft <= 0) {
+        clearInterval(interval);
+        timerEl.textContent = '0:00';
+        // time's up — villain loses if heroes still alive
+        if (typeof endMatch === 'function' && getState() === STATES.BATTLE) {
+          endMatch('hero');
+        }
+      }
+    }, 1000);
+  }
+
+  // start timer when match starts
+  // document.addEventListener('DOMContentLoaded', () => {
+  //   document.addEventListener('game:matchStarted', () => startRoundTimer());
+  // });
+  window.addEventListener('DOMContentLoaded', () => startRoundTimer());
+</script>
+
 </html>
