@@ -13,6 +13,7 @@
   <script src="game/game.js"></script>
   <script src="game/physics.js"></script>
   <script src="game/network.js"></script>
+  <script src="game/spectator.js"></script>
   <script src="UI/menu.js"></script>
   <script src="game/ui.js"></script>
   <script src="game/audio.js"></script>
@@ -285,9 +286,9 @@
       <!-- keep the platform for now -->
       <a-box
         id="platform"
-        position="0 1 0"
-        width="30" height="0.5" depth="30"
-        color="#8B4513"
+        position="0 2.3 0"
+        width="30" height="0.2" depth="30"
+        visible="false"
         static-body="shape: box"
       ></a-box>
     </a-entity>
@@ -316,10 +317,11 @@
         src="#model-brute"
         scale="0.8 0.8 0.8"
         position="0 0 0"
+        visible="false"
       ></a-gltf-model>
       <a-camera
         id="main-camera"
-        position="0 3 0"
+        position="0 2 -0.2"
         look-controls="pointerLockEnabled: true"
         wasd-controls="enabled: false"
       ></a-camera>
@@ -342,6 +344,25 @@
   z-index: 999;
   pointer-events: none;
 ">3:00</div>
+
+<!-- SPECTATE OVERLAY -->
+<div id="spectate-overlay" style="
+  display: none;
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 18px;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 8px #000;
+  z-index: 999;
+  pointer-events: none;
+  text-align: center;
+">
+  <div id="spectate-text">Spectating: —</div>
+  <div style="font-size:12px; opacity:0.6; margin-top:4px">[ N ] next player</div>
+</div>
 
 <script>
   // TEMP — move to ui.js later

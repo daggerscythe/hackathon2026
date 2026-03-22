@@ -222,18 +222,21 @@ function sendAttackEvent(attackType, targetId, damage) {
 // RECEIVE ATTACK — apply damage locally
 // ============================================
 function handleRemoteAttack(msg) {
-  const target = characters.get(msg.targetId);
+  // if the target is us, our local character id is 'villain' not 'remote-xyz'
+  const targetId = (msg.targetId === `remote-${MY_ID}`) ? 'villain' : msg.targetId;
+
+  const target = characters.get(targetId);
   if (!target || !target.isAlive) return;
 
   target.health = Math.max(0, target.health - msg.damage);
 
   emit(GAME_EVENTS.HEALTH_CHANGED, {
-    characterId: msg.targetId,
+    characterId: targetId,
     health:      target.health,
     maxHealth:   target.maxHealth,
   });
 
-  if (target.health <= 0) handleDeath(msg.targetId);
+  if (target.health <= 0) handleDeath(targetId);
 }
 
 // ============================================
@@ -254,3 +257,16 @@ function handleRemoteLeave(msg) {
   delete remoteTargets[id];
   characters.delete(id);
 }
+
+// bottom of network.js — tell server when local player dies
+document.addEventListener('game:characterDefeated', (e) => {
+  if (e.detail.characterId !== 'villain') return; // only local player
+
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    method:      'playerDied',
+    clientId:    MY_ID,
+    gameId:      sessionStorage.getItem('gameId'),
+    characterId: 'villain',
+  }));
+});

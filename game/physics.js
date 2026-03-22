@@ -58,6 +58,7 @@ AFRAME.registerComponent('player-physics', {
     },
 
     tick(time, delta) {
+        if (typeof isSpectating !== 'undefined' && isSpectating) return;
         const bodyComponent = this.el.components['dynamic-body'];
         if (!bodyComponent || !bodyComponent.body) return;
         const body = bodyComponent.body;
@@ -124,33 +125,6 @@ AFRAME.registerComponent('melee-hitbox', {
     if (this.active) return; // prevent spam
     this.active = true;
 
-    // // get player's world position and facing direction
-    // const playerPos  = this.el.object3D.position;
-    // const worldQuat  = new THREE.Quaternion();
-    // this.el.object3D.getWorldQuaternion(worldQuat);
-    // const forward    = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
-
-    // // place hitbox 1 unit in front of player in world space
-    // const hitPos = new THREE.Vector3(
-    //     playerPos.x + forward.x * 1.0,
-    //     playerPos.y + 1.0,
-    //     playerPos.z + forward.z * 1.0,
-    // );
-
-    // // create a box in front of the player
-    // const box = document.createElement('a-box');
-    // box.setAttribute('width',    '1.2');
-    // box.setAttribute('height',   '1.2');
-    // box.setAttribute('depth',    '0.8');
-    // box.setAttribute('position', `${hitPos.x} ${hitPos.y} ${hitPos.z}`);
-    // box.setAttribute('color',    '#ffff00');
-    // box.setAttribute('opacity',  '0.3');         // semi-transparent so you can see it
-
-    // // append to SCENE, not player entity
-    // const scene = document.querySelector('a-scene');
-    // scene.appendChild(box);
-    // this.hitbox = box;
-
     // check for hits while active
     this.checkHits();
 
@@ -178,8 +152,10 @@ AFRAME.registerComponent('melee-hitbox', {
       if (dist <= MELEE_RANGE) {
         const damage = calcDamage(attacker, target, 'strength');
         applyHit(this.data.characterId, target.id, 'strength'); // apply once
-        // Tell Colyseus server about this hit (server re-validates + broadcasts)
-        if (typeof sendAttackEvent === 'function') sendAttackEvent('melee', target.id, damage);
+        // send the target's entity id so other clients can map it correctly
+        if (typeof sendAttackEvent === 'function') {
+          sendAttackEvent('melee', target.id, damage);
+        }
       }
     });
   },
@@ -216,6 +192,7 @@ AFRAME.registerComponent('attack-input', {
 
     this.onMouseDown = (e) => {
       if (e.button !== 0) return; // left click only
+      if (typeof isSpectating !== 'undefined' && isSpectating) return;
       if (getState() !== STATES.BATTLE) return;
 
       const isMagic = this.magicClasses.includes(this.data.attackClass);

@@ -946,6 +946,9 @@ AFRAME.registerComponent('game-manager', {
     const char   = characters.get(characterId);
     if (!char)   return;
 
+    // don't hide local player entity — camera is inside it
+    if (characterId === 'villain') return;
+
     const charEl = document.getElementById(char.entityId);
     if (!charEl) return;
 
