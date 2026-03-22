@@ -437,13 +437,13 @@
         0 0 70px rgba(201,168,76,0.3),
         0 2px 8px rgba(0,0,0,1);
       padding: 16px 40px;
-      background: linear-gradient(180deg, rgba(4,6,12,0.95) 0%, rgba(4,6,12,0.4) 70%, transparent 100%);
+      background: none;
       white-space: nowrap;
       opacity: 0;
       transition: opacity 0.38s;
       display: inline-block;
     }
-    .banner-text.visible { opacity: 1; }
+    .banner-text.visible { }
 
     /* ═══════════════════════════════════════════════════════════════════════
        GAME OVER OVERLAY — full cinematic screen, menu-grade typography
@@ -732,6 +732,33 @@ function buildHUD() {
   `;
   timerEl.textContent = '3:00';
   document.body.appendChild(timerEl);
+
+  // ── Crosshair
+  const crosshair = document.createElement('div');
+  crosshair.id = 'crosshair';
+  crosshair.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 999;
+  `;
+  crosshair.innerHTML = `
+    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <!-- top line -->
+      <line x1="12" y1="2"  x2="12" y2="8"  stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- bottom line -->
+      <line x1="12" y1="16" x2="12" y2="22" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- left line -->
+      <line x1="2"  y1="12" x2="8"  y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- right line -->
+      <line x1="16" y1="12" x2="22" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- center dot -->
+      <circle cx="12" cy="12" r="1.2" fill="white"/>
+    </svg>
+  `;
+  document.body.appendChild(crosshair);
 
   // ── State banner
   hudBanner = document.createElement('div');

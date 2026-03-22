@@ -147,9 +147,10 @@ function getState() {
 // Constants
 
 const BASE_HEALTH = 100;
-const BASE_DAMAGE = 10;
-const VILLAIN_HEALTH_PER_KILL = 50;
-const BASE_HEAL_RATE = 5;
+const BASE_DAMAGE = 25;
+const BASE_DAMAGE_MAGIC = 35;
+const VILLAIN_HEALTH_PER_KILL = 30;
+const BASE_HEAL_RATE = 15;
 
 const characterPools = {
     hero: { tank: [], dps: [], support: [], mage: [] },
@@ -238,18 +239,12 @@ function isAlive(id) {
     return char ? char.isAlive : false;
 };
 
-// damage calculation math
-/**
- * Formula:
- * raw damage = BASE_DAMAGE * attacker dmg mult
- * damage taken = raw damage * (1 - defender dfns) 
- * @param {string} attackType - 'strength' (melee) | 'magic' (range)
- */
 function calcDamage(attacker, defender, attackType) {
-    const statMult = attacker[attackType]; // 0-1
-    const rawDamage = BASE_DAMAGE * statMult;
+    const base     = attackType === 'magic' ? BASE_DAMAGE_MAGIC : BASE_DAMAGE;
+    const statMult = attacker[attackType];
+    const rawDamage   = base * statMult;
     const damageTaken = rawDamage * (1 - defender.defense);
-    return Math.max(0.1, damageTaken); 
+    return Math.max(3, damageTaken); // floor at 3, never less
 }
 
 /**
@@ -470,8 +465,8 @@ function resetMatch() {
 // Combat System
 // =====================================
 const COOLDOWNS = {
-    magic: 3000, // in ms
-    heal: 5000,
+    magic: 1500, // was 3000
+    heal:  5000,
 };
 
 const CLASS_ATTACK_TYPE = {
