@@ -149,3 +149,12 @@ Characters are classified at load time by their stats. A player picks a class du
 data.csv       → Character database (~780 characters)
 index.html     → Main game scene (A-Frame)
 ```
+
+## MVP+++:
+    - implement character customization in ready up menu
+    - add dead ragdolls on the ground
+    - change between sky and night
+    - different arenas
+    - implement power ups
+    - implement shields and special abilities
+    - implement leveling up, ranks, and a leaderboard
