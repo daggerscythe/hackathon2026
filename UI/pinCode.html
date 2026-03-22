@@ -316,7 +316,7 @@
         <p class="join-sub">Get these from the host</p>
         <label class="section-label" style="margin-bottom:4px">Server address</label>
         <input class="rpg-input" id="server-ip-input" type="text"
-               placeholder="192.168.1.x  or  localhost" value="localhost" />
+               placeholder="192.168.1.x  or  localhost" />
         <label class="section-label" style="margin-bottom:4px">Room code</label>
         <input class="rpg-input" id="room-code-input" type="text" maxlength="4"
                placeholder="e.g. KRVN"
@@ -883,7 +883,7 @@
     }
 
     function joinGame() {
-      const ip   = document.getElementById('server-ip-input').value.trim() || 'localhost';
+      const ip   = document.getElementById('server-ip-input').value.trim() || window.location.hostname || 'localhost';
       const code = document.getElementById('room-code-input').value.trim().toUpperCase();
       clearErrors();
       if (!code || code.length !== 4) { showError('join-error', 'Enter the 4-letter room code.'); return; }
@@ -931,6 +931,19 @@
       });
     }
     function goBack() { window.location.href = 'mode-select.html'; }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // AUTO-FILL SERVER ADDRESS from current page hostname
+    // Falls back to 'localhost' when served from file:// or 127.0.0.1
+    // ══════════════════════════════════════════════════════════════════════
+    (function seedServerAddress() {
+      const hostname = window.location.hostname;
+      // Use the real hostname unless it's empty (file://) or a loopback address
+      const isLoopback = !hostname || hostname === '127.0.0.1' || hostname === '::1';
+      const defaultAddr = isLoopback ? 'localhost' : hostname;
+      const input = document.getElementById('server-ip-input');
+      if (input) input.value = defaultAddr;
+    })();
 
     // ══════════════════════════════════════════════════════════════════════
     // THREE.JS BACKGROUND (crown)
