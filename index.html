@@ -7,27 +7,6 @@
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-  <!-- Colyseus JS SDK -->
-  <!-- Primary: served from node_modules by express (works on LAN, no internet needed) -->
-  <!-- Fallback: CDN if local file isn't ready yet -->
-  <script>
-    (function() {
-      var s = document.createElement('script');
-      s.src = '/colyseus.js';
-      s.onerror = function() {
-        console.warn('[Boot] Local colyseus.js not found, falling back to CDN');
-        var s2 = document.createElement('script');
-        // @colyseus/sdk 0.15.x — stable version with Colyseus global
-        s2.src = 'https://cdn.jsdelivr.net/npm/@colyseus/sdk@0.15.16/dist/colyseus.js';
-        s2.onerror = function() {
-          console.error('[Boot] Both local and CDN colyseus.js failed to load.');
-        };
-        document.head.appendChild(s2);
-      };
-      document.head.appendChild(s);
-    })();
-  </script>
   <!-- Physics plugin -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.4/dist/aframe-physics-system.min.js"></script>
 
@@ -190,44 +169,70 @@
     // INITIALIZE LOBBY
     // ============================================
     function initMatchFromLobby() {
-      // In multiplayer, Colyseus (network.js) handles spawning remote entities
-      // and calls initMatch once all players are in the room.
-      // This function only needs to handle the solo / offline fallback.
-
+      const scene        = document.querySelector('a-scene');
       const lobbyPlayers = JSON.parse(sessionStorage.getItem('lobbyPlayers') || '[]');
       const myClientId   = sessionStorage.getItem('clientId');
-      const myUsername   = sessionStorage.getItem('lobbyUsername') || '';
       const myClass      = sessionStorage.getItem('selectedClass') || 'brute';
       const myRole       = sessionStorage.getItem('selectedRole')  || 'villain';
       const myName       = sessionStorage.getItem('selectedCharacter') || 'You';
 
-<<<<<<< HEAD
-      // add right after reading sessionStorage values
       console.log('[LOBBY] My role:', myRole, '| My class:', myClass, '| My name:', myName, '| My clientId:', myClientId);
       console.log('[LOBBY] Lobby players:', lobbyPlayers);
-      // fallback to dummies if no lobby data (solo testing)
-      const players = lobbyPlayers.length > 0 ? lobbyPlayers : [
-        { username: 'Wonder Hulk',       character: { cls: 'tank',        role: 'hero'    } },
-        { username: 'Super Girl',        character: { cls: 'dps',         role: 'hero'    } },
-        { username: 'Metal Knight',      character: { cls: 'support',     role: 'hero'    } },
-        { username: 'Professor Darkness',character: { cls: 'villain_mage',role: 'villain' } },
-      ];
 
-      players.forEach((p, i) => {
+      // find my own spawn position from lobby data
+      const myLobbyEntry = lobbyPlayers.find(p => p.clientId === myClientId);
+      const mySpawnX     = myLobbyEntry?.spawnX ?? 0;
+      const mySpawnY     = myLobbyEntry?.spawnY ?? 3;
+      const mySpawnZ     = myLobbyEntry?.spawnZ ?? 0;
+
+      console.log(`[SPAWN] My spawn: x:${mySpawnX} y:${mySpawnY} z:${mySpawnZ}`);
+
+      // move local player to their spawn position
+      const localPlayerEl = document.getElementById('player-villain');
+      if (localPlayerEl) {
+        localPlayerEl.setAttribute('position', `${mySpawnX} ${mySpawnY} ${mySpawnZ}`);
+        const body = localPlayerEl.components['dynamic-body']?.body;
+        if (body) {
+          body.position.set(mySpawnX, mySpawnY, mySpawnZ);
+          body.velocity.set(0, 0, 0);
+        }
+      }
+
+      // register local player
+      addCharacter('villain', myRole, myClass, {
+        name:     myName,
+        strength: 80, magic: 75, defense: 60, speed: 50, power: 20,
+      }, 'player-villain');
+
+      // update local player model and attack-input to match chosen class
+      const localModel = document.getElementById('villain-model');
+      if (localModel) {
+        localModel.setAttribute('src', `#${CLASS_MODEL[myClass] || 'model-brute'}`);
+      }
+      if (localPlayerEl) {
+        localPlayerEl.setAttribute('attack-input', `characterId: villain; attackClass: ${myClass}`);
+        localPlayerEl.dataset.characterId = 'villain';
+      }
+
+      // spawn remote players at their server-assigned positions
+      // network.js will handle movement sync from here
+      lobbyPlayers.forEach((p, i) => {
         const cls      = p.character?.cls  || 'tank';
         const role     = p.character?.role || 'hero';
         const nickname = p.username        || `Player ${i + 1}`;
 
-        // skip ourselves — local player is already in the scene
         if (p.clientId === myClientId) return;
 
         const id = `remote-player-${i}`;
-        const x  = (Math.random() - 0.5) * 24;
-        const z  = (Math.random() - 0.5) * 24;
+        const x  = p.spawnX ?? 0;
+        const y  = p.spawnY ?? 3;
+        const z  = p.spawnZ ?? 0;
+
+        console.log(`[SPAWN] Remote ${nickname} at x:${x} y:${y} z:${z}`);
 
         const entity = document.createElement('a-entity');
         entity.setAttribute('id',         id);
-        entity.setAttribute('position',   `${x} 3 ${z}`);
+        entity.setAttribute('position',   `${x} ${y} ${z}`);
         entity.setAttribute('health-bar', `nickname: ${nickname}; health: 100; maxHealth: 100`);
 
         const model = document.createElement('a-gltf-model');
@@ -243,63 +248,8 @@
         }, id);
       });
 
-      // register local player with their actual selected class
-      addCharacter('villain', myRole, myClass, {
-        name:     myName,
-        strength: 80, magic: 75, defense: 60, speed: 50, power: 20,
-      }, 'player-villain');
-
-      // update local player's model to match chosen class
-=======
-      // Update local player model + attack-input to match chosen class
->>>>>>> 6d7de8c (maybe something)
-      const localModel = document.getElementById('villain-model');
-      if (localModel) localModel.setAttribute('src', `#${CLASS_MODEL[myClass] || 'model-brute'}`);
-      const playerEl = document.getElementById('player-villain');
-      if (playerEl) {
-        playerEl.setAttribute('attack-input', `characterId: villain; attackClass: ${myClass}`);
-        playerEl.dataset.characterId = 'villain';
-      }
-
-      // MULTIPLAYER: Colyseus network.js takes over from here.
-      // It will call addCharacter + initMatch once room state arrives.
-      if (lobbyPlayers.length > 0) {
-        console.log('[Game] Multiplayer mode — Colyseus will bootstrap the match');
-        return;
-      }
-
-      // SOLO FALLBACK: spawn dummy NPCs for testing without a server
-      const scene   = document.querySelector('a-scene');
-      const heroIds = [];
-      const dummies = [
-        { id: 'npc-0', cls: 'tank',    role: 'hero', name: 'Wonder Hulk',  str: 80, mag: 30, def: 75, spd: 40, pow: 30 },
-        { id: 'npc-1', cls: 'dps',     role: 'hero', name: 'Super Girl',   str: 85, mag: 40, def: 50, spd: 80, pow: 25 },
-        { id: 'npc-2', cls: 'support', role: 'hero', name: 'Metal Knight', str: 20, mag: 50, def: 40, spd: 45, pow: 80 },
-      ];
-
-      dummies.forEach(d => {
-        const x = (Math.random() - 0.5) * 24, z = (Math.random() - 0.5) * 24;
-        const entity = document.createElement('a-entity');
-        entity.setAttribute('id', d.id);
-        entity.dataset.characterId = d.id;
-        entity.setAttribute('position', `${x} 3 ${z}`);
-        entity.setAttribute('health-bar', `nickname: ${d.name}; health: 100; maxHealth: 100`);
-        const model = document.createElement('a-gltf-model');
-        model.setAttribute('src', `#${CLASS_MODEL[d.cls] || 'model-tank'}`);
-        model.setAttribute('scale', '0.8 0.8 0.8');
-        entity.appendChild(model);
-        scene.appendChild(entity);
-        addCharacter(d.id, d.role, d.cls, { name: d.name, strength: d.str, magic: d.mag, defense: d.def, speed: d.spd, power: d.pow }, d.id);
-        heroIds.push(d.id);
-      });
-
-      addCharacter('villain', myRole, myClass, {
-        name: myName, strength: 80, magic: 75, defense: 60, speed: 50, power: 20,
-      }, 'player-villain');
-
-      initMatch('villain', heroIds);
+      transitionTo(STATES.BATTLE);
     }
-
     // wait for scene to fully load before spawning// wait for scene to fully load before spawning
     document.addEventListener('DOMContentLoaded', () => {
       const scene = document.querySelector('a-scene');
@@ -321,6 +271,7 @@
       shadow="type: pcfsoft"
       physics="gravity: -9.8; debug: true"
       game-manager
+      network-lerp
     >
 
     <!-- Assets -->
@@ -397,9 +348,6 @@
   </a-scene>
 
 </body>
-
-<!-- Debug overlay — press ` to toggle, remove before shipping -->
-<script src="game/debug-overlay.js"></script>
 
 <!-- TEMP TIMER — move to ui.js later  -->
 <div id="round-timer" style="

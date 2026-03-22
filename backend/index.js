@@ -1,20 +1,9 @@
-// ============================================================
-// backend/index.js
-//
-// Three servers:
-//   9091  HTTP    static files
-//   9090  WS      lobby (pinCode.html + characterSelection.html)
-//                 UNCHANGED from original — WebRTC/WS lobby intact
-//   2567  Colyseus authoritative game rooms
-// ============================================================
 
 const http    = require('http');
 const express = require('express');
 const path    = require('path');
 const os      = require('os');
 const { server: WebSocketServer } = require('websocket');
-const { Server }    = require('colyseus');
-const { ArenaRoom } = require('./ArenaRoom');
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
 const app      = express();
@@ -27,25 +16,6 @@ app.use(express.static(gamePath));
 app.use(express.static(rootPath, { index: false }));
 app.get('/', (req, res) => res.sendFile(path.join(uiPath, 'menu.html')));
 
-// Serve Colyseus SDK from node_modules — keeps LAN play fully offline-capable
-// Tries multiple possible install locations
-app.get('/colyseus.js', (req, res) => {
-  const fs = require('fs');
-  const candidates = [
-    path.resolve(__dirname, 'node_modules/@colyseus/sdk/dist/colyseus.js'),
-    path.resolve(__dirname, '../node_modules/@colyseus/sdk/dist/colyseus.js'),
-    path.resolve(__dirname, 'node_modules/colyseus.js/dist/colyseus.js'),
-    path.resolve(__dirname, '../node_modules/colyseus.js/dist/colyseus.js'),
-  ];
-  const found = candidates.find(p => fs.existsSync(p));
-  if (found) {
-    res.sendFile(found);
-  } else {
-    console.warn('[Server] colyseus.js not found in node_modules. Run: npm install colyseus @colyseus/schema');
-    res.status(404).send('// colyseus.js not found — run npm install colyseus @colyseus/schema');
-  }
-});
-
 function getLocalIp() {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets))
@@ -57,14 +27,6 @@ function getLocalIp() {
 app.listen(9091, '0.0.0.0', () => {
   console.log(`HTTP     -> http://localhost:9091`);
   console.log(`LAN      -> http://${getLocalIp()}:9091`);
-});
-
-// ── Colyseus — authoritative game server ─────────────────────────────────
-const gameServer = new Server();
-gameServer.define('arena', ArenaRoom);
-gameServer.listen(2567, '0.0.0.0').then(() => {
-  console.log(`Colyseus -> ws://localhost:2567`);
-  console.log(`Colyseus -> ws://${getLocalIp()}:2567  (LAN)`);
 });
 
 // ── Lobby WebSocket — port 9090 (ORIGINAL CODE, UNTOUCHED) ───────────────
@@ -82,20 +44,12 @@ const MAX_PLAYERS = 4;
 const MIN_START   = 2;
 
 const send   = (conn, p)      => { try { conn.send(JSON.stringify(p)); } catch {} };
-const bcast  = (game, p)      => game.players.forEach(pl => { const c = clients[pl.clientId]; if (c) send(c.connection, p); });
+const broadcast  = (game, p)      => game.players.forEach(pl => { const c = clients[pl.clientId]; if (c) send(c.connection, p); });
 
-const publicGame = game => ({
-  id:      game.id,
-  players: game.players.map(p => ({
-    clientId:  p.clientId,
-    username:  p.username,
-    color:     p.color,
-    ready:     p.ready,
-    character: p.character,
-  })),
-});
+function makeId() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
-<<<<<<< HEAD
 // ── Helper: strip internal clientIds before sending to browsers ───────────
 function publicGame(game) {
   return {
@@ -116,10 +70,6 @@ function publicGame(game) {
 // ── Helper: generate a random 4-character room PIN ────────────────────────
 function makePin() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/1/0 confusion
-=======
-const makePin = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
->>>>>>> 6d7de8c (maybe something)
   let pin;
   do { pin = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
   while (games[pin]);
@@ -128,11 +78,7 @@ const makePin = () => {
 
 wsServer.on('request', request => {
   const conn     = request.accept(null, request.origin);
-<<<<<<< HEAD
   let clientId = makeId();
-=======
-  const clientId = Math.random().toString(36).slice(2, 10);
->>>>>>> 6d7de8c (maybe something)
   clients[clientId] = { connection: conn, username: null };
   send(conn, { method: 'connect', clientId });
 
@@ -140,7 +86,7 @@ wsServer.on('request', request => {
     for (const game of Object.values(games)) {
       const before = game.players.length;
       game.players  = game.players.filter(p => p.clientId !== clientId);
-      if (game.players.length !== before) bcast(game, { method: 'playerLeft', clientId, game: publicGame(game) });
+      if (game.players.length !== before) broadcast(game, { method: 'playerLeft', clientId, game: publicGame(game) });
     }
     delete clients[clientId];
   });
@@ -169,7 +115,7 @@ wsServer.on('request', request => {
       const color = COLORS[game.players.length];
       game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
       const pg = publicGame(game);
-      bcast(game, { method: 'join',   gameId: pin, game: pg });
+      broadcast(game, { method: 'join',   gameId: pin, game: pg });
       send(conn,  { method: 'joined', gameId: pin, game: pg, yourColor: color });
     }
 
@@ -178,12 +124,11 @@ wsServer.on('request', request => {
       const player = game.players.find(p => p.clientId === clientId); if (!player) return;
       player.ready     = !player.ready;
       player.character = msg.character || player.character;
-      bcast(game, { method: 'ready', game: publicGame(game) });
+      broadcast(game, { method: 'ready', game: publicGame(game) });
     }
 
-<<<<<<< HEAD
     // ── START: host force-start override ────────────────────────────────
-    if (method === "start") {
+    if (msg.method === 'start') {
       const game = games[msg.gameId];
       if (!game) return;
       // only host can start
@@ -228,25 +173,12 @@ wsServer.on('request', request => {
         p.spawnY = 3; // above platform surface (platform is at y=1, height 0.5, so top is 1.25)
         console.log(`[SPAWN] ${p.username} → x:${p.spawnX.toFixed(2)} z:${p.spawnZ.toFixed(2)}`);
       });
-
-      broadcast(game, { method: 'start', game: publicGame(game) });
       // _____________________NEW CODE_______________________
 
       broadcast(game, { method: 'start', game: publicGame(game) });
-=======
-    if (msg.method === 'start') {
-      const game = games[msg.gameId]; if (!game) return;
-      if (game.players[0]?.clientId !== clientId) { send(conn, { method: 'error', message: 'Only host can start.' }); return; }
-      if (game.players.length < MIN_START)         { send(conn, { method: 'error', message: 'Need at least 2 players.' }); return; }
-      const vc = game.players.filter(p => p.character?.role === 'villain').length;
-      if (vc === 0) { send(conn, { method: 'error', message: 'Need 1 villain.' }); return; }
-      if (vc > 1)   { send(conn, { method: 'error', message: 'Only 1 villain allowed.' }); return; }
-      bcast(game, { method: 'start', game: publicGame(game) });
->>>>>>> 43e2ddcd5c03413e3acb68c8053167602276f885
     }
 
-<<<<<<< HEAD
-    if (method === 'identify') {
+    if (msg.method === 'identify') {
       const existingId = msg.clientId;
       const gameId     = msg.gameId;
 
@@ -302,20 +234,20 @@ wsServer.on('request', request => {
     }
 
     // ── MOVE: relay position to everyone else in the game ───────────────
-    if (method === 'playerMove') {
+    if (msg.method === 'playerMove') {
       const game = games[msg.gameId];
       if (!game) return;
 
       // use the closure clientId which is now the re-identified one
       game.players.forEach(p => {
-        if (p.clientId === msg.clientId) return; // skip sender
+        if (p.clientId === clientId) return;
         const c = clients[p.clientId];
         if (c) send(c.connection, { ...msg });
       });
     }
 
     // ── ATTACK: relay attack to everyone else ───────────────────────────
-    if (method === 'playerAttack') {
+    if (msg.method === 'playerAttack') {
       const game = games[msg.gameId];
       if (!game) return;
 
@@ -327,19 +259,10 @@ wsServer.on('request', request => {
     }
 
     // ── PLAYER DIED: relay to everyone ──────────────────────────────────
-    if (method === 'playerDied') {
+    if (msg.method === 'playerDied') {
       const game = games[msg.gameId];
       if (!game) return;
       broadcast(game, { ...msg, clientId });
-=======
-    // identify — used by characterSelection.html (re-register connection)
-    if (msg.method === 'identify') {
-      const eid = msg.clientId;
-      if (!eid) return;
-      if (clients[eid]) { clients[eid].connection = conn; }
-      else { clients[eid] = { connection: conn, username: msg.username }; }
-      if (clientId !== eid) delete clients[clientId];
->>>>>>> 6d7de8c (maybe something)
     }
   });
 });
