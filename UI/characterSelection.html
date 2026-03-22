@@ -418,59 +418,93 @@ function buildGrid() {
   });
 }
 
+// ── Read which side was chosen in the lobby ──────────────────────────
+const chosenSide = sessionStorage.getItem('characterSide') || 'Hero';
+const isVillainSide = chosenSide === 'Villain';
+
+// Update the page title to reflect the side
+document.querySelector('.page-title').textContent =
+  isVillainSide ? 'Choose Your Villain' : 'Choose Your Champion';
+
+// ── Role criteria differ by side ─────────────────────────────────────
+// Heroes: Tank / DPS / Support / Mage  (original thresholds)
+// Villains: Brute / Destroyer / Schemer / Sorcerer  (same stat thresholds, new labels)
+const ROLES = isVillainSide
+  ? [
+      { cls: 'Brute',     test: c => c.def >= 70 && c.spd <= 50,              criteria: 'DEF ≥ 70  &  SPD ≤ 50' },
+      { cls: 'Destroyer', test: c => c.str >= 80 && c.def <= 60,              criteria: 'STR ≥ 80  &  DEF ≤ 60' },
+      { cls: 'Schemer',   test: c => c.pow >= 70 && c.str <= 20 && c.def <= 20, criteria: 'POW ≥ 70  &  STR ≤ 20  &  DEF ≤ 20' },
+      { cls: 'Sorcerer',  test: c => c.mag >= 80 && c.def <= 40,              criteria: 'MAG ≥ 80  &  DEF ≤ 40' },
+    ]
+  : [
+      { cls: 'Tank',    test: c => c.def >= 70 && c.spd <= 50,              criteria: 'DEF ≥ 70  &  SPD ≤ 50' },
+      { cls: 'DPS',     test: c => c.str >= 80 && c.def <= 60,              criteria: 'STR ≥ 80  &  DEF ≤ 60' },
+      { cls: 'Support', test: c => c.pow >= 70 && c.str <= 20 && c.def <= 20, criteria: 'POW ≥ 70  &  STR ≤ 20  &  DEF ≤ 20' },
+      { cls: 'Mage',    test: c => c.mag >= 80 && c.def <= 40,              criteria: 'MAG ≥ 80  &  DEF ≤ 40' },
+    ];
+
+function classifyCharacter(c) {
+  for (const role of ROLES) {
+    if (role.test(c)) return role.cls;
+  }
+  return null;
+}
+
+// ── Inject criteria legend below the grid ────────────────────────────
+function buildCriteriaLegend() {
+  let legend = document.getElementById('criteria-legend');
+  if (!legend) {
+    legend = document.createElement('div');
+    legend.id = 'criteria-legend';
+    legend.style.cssText = `
+      font-family:'Cinzel',serif; font-size:0.48rem; letter-spacing:2px;
+      text-transform:uppercase; color:var(--white-faint);
+      display:flex; flex-wrap:wrap; gap:10px 24px; margin-top:6px;
+    `;
+    document.querySelector('.grid-wrap').appendChild(legend);
+  }
+  legend.innerHTML = ROLES.map(r =>
+    `<span><span style="color:var(--gold-dim)">${r.cls}</span> — ${r.criteria}</span>`
+  ).join('');
+}
+
 fetch('../data.csv')
   .then(r => r.text())
   .then(content => {
-   const raw = csvToJson(content);
+    const raw = csvToJson(content);
 
-    // Map CSV rows → CHARACTERS format
+    // Filter to the correct side
+    const sideFilter = isVillainSide ? 'True' : 'False';
+
     CHARACTERS = raw
-      .filter(obj => obj.isVillain === 'False')
+      .filter(obj => obj.isVillain === sideFilter)
       .map(obj => {
-        const str = +obj.Strength || 0;
-        const def = +obj.Defense  || 0;
-        const mag = +obj.Magic    || 0;
-        const spd = +obj.Speed    || 0;
-        const pow = +obj.Power    || 0;
+        const str = +obj.Strength      || 0;
+        const def = +obj.Defense       || 0;
+        const mag = +obj.Magic         || 0;
+        const spd = +obj.Speed         || 0;
+        const pow = +obj.Power         || 0;
+        const dex = +obj.Intelligence  || 0;
 
-        let cls;
-        if      (def >= 70 && spd <= 50)              cls = 'Tank';
-        else if (str >= 80 && def <= 60)              cls = 'DPS';
-        else if (pow >= 70 && str <= 20 && def <= 20) cls = 'Support';
-        else if (mag >= 80 && def <= 40)              cls = 'Mage';
-        else return null;  // ← no class = skip entirely
+        const cls = classifyCharacter({ str, def, mag, spd, pow, dex });
+        if (!cls) return null;  // skip unclassified
 
-        return { name: obj.Name, cls, emoji: '⚔️', str, dex: +obj.Intelligence || 0, mag, def, spd };
+        const emoji = isVillainSide ? '💀' : '⚔️';
+        return { name: obj.Name, cls, emoji, str, dex, mag, def, spd, pow };
       })
-      .filter(Boolean).slice(0, 50); ;  // strips out the nulls before padding, also stops at 50 characters
+      .filter(Boolean)
+      .slice(0, 50);
 
     // Pad to fill a 10-col grid
     while (CHARACTERS.length % 10 !== 0) {
-      CHARACTERS.push({ name:'???', cls:'', emoji:'🔒', str:0, dex:0, mag:0, def:0, spd:0, locked:true });
+      CHARACTERS.push({ name:'???', cls:'', emoji:'🔒', str:0, dex:0, mag:0, def:0, spd:0, pow:0, locked:true });
     }
 
-    // ── Role Classification ─────────────────────────────────────────────
-    const tanks = [], dps = [], support = [], mage = [], no_class = [];
+    console.log(`${chosenSide} characters loaded:`, CHARACTERS.filter(c => !c.locked).map(c => `${c.name} (${c.cls})`));
 
-    for (const c of CHARACTERS) {
-      if (c.locked) continue;
-      const { name, str, def, mag, spd } = c;
-      if      (def >= 70 && spd <= 50)              tanks.push(name);
-      else if (str >= 80 && def <= 60)              dps.push(name);
-      else if (mag >= 70 && str <= 20 && def <= 20) support.push(name);
-      else if (mag >= 80 && def <= 40)              mage.push(name);
-      else                                          no_class.push(name);
-    }
-
-    console.log('Tanks:',    tanks);
-    console.log('DPS:',      dps);
-    console.log('Support:',  support);
-    console.log('Mage:',     mage);
-    console.log('No class:', no_class);
-
-    // Build grid and init preview now that data is ready
     buildGrid();
-    setPreview(CHARACTERS[0]);
+    buildCriteriaLegend();
+    if (CHARACTERS.length > 0) setPreview(CHARACTERS[0]);
   })
   .catch(err => console.error('Failed to load data.csv:', err));
 
@@ -564,7 +598,11 @@ window.addEventListener('resize', () => {
 // ── Nav ───────────────────────────────────────────────────────────────
 function confirmSelection() {
   if (selectedIdx === null) { alert('Choose a champion first.'); return; }
-  alert(`Champion chosen: ${CHARACTERS[selectedIdx].name}\n\nThe adventure begins…`);
+  const chosen = CHARACTERS[selectedIdx];
+  sessionStorage.setItem('selectedCharacter', chosen.name);
+  sessionStorage.setItem('selectedClass', chosen.cls);
+  // For now navigate back — swap for actual game page once ready
+  alert(`Champion chosen: ${chosen.name} (${chosen.cls})\n\nThe adventure begins…`);
 }
 function goBack() { window.location.href = 'mode-select.html'; }
   

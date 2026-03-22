@@ -407,11 +407,24 @@
           break;
 
         case 'start':
-          window.location.href = '../index.html';
+          // Pass the Hero/Villain choice and gameId to the character selection screen
+          sessionStorage.setItem('characterSide', myCharacter || 'Hero');
+          sessionStorage.setItem('gameId', currentGameId);
+          window.location.href = 'characterSelection.html';
           break;
 
         case 'ready':
-          if (msg.game) renderLobby(msg.game);
+          if (msg.game) {
+            renderLobby(msg.game);
+            // Re-sync our own ready state from the server's truth
+            const me = msg.game.players.find(p => p.username === username);
+            if (me !== undefined) {
+              myReady = me.ready;
+              const btn = document.getElementById('ready-btn');
+              btn.textContent = myReady ? 'Unready ✗' : 'Ready Up ✓';
+              btn.style.opacity = myReady ? '0.6' : '1';
+            }
+          }
           break;
 
         case 'playerLeft':
