@@ -11,7 +11,11 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@colyseus/schema": "^4.0.19",
+    "@colyseus/sdk": "^0.17.35",
+    "colyseus": "^0.17.8",
     "express": "^5.2.1",
+    "networked-aframe": "^0.14.2",
     "websocket": "^1.0.35",
     "ws": "^8.20.0"
   }

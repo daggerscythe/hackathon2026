@@ -871,7 +871,7 @@
       isHost = true; mySide = null; myCharacter = null; myReady = false;
       clearErrors(); buildEmptySlots(); showScreen('screen-lobby');
       setStatus('Connecting…', '');
-      connectWS('localhost', () => {
+      connectWS(location.hostname, () => {
         sendWS({ method: 'create', clientId, username });
         document.getElementById('start-btn').style.display = 'inline';
       });

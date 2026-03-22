@@ -1,74 +1,101 @@
-const http    = require("http");
-const express = require("express");
-const path    = require("path");
-const os = require("os");
-const { server: WebSocketServer } = require("websocket");
+// ============================================================
+// backend/index.js
+//
+// Three servers:
+//   9091  HTTP    static files
+//   9090  WS      lobby (pinCode.html + characterSelection.html)
+//                 UNCHANGED from original — WebRTC/WS lobby intact
+//   2567  Colyseus authoritative game rooms
+// ============================================================
 
-// ── HTTP server (serves static game files) ────────────────────────────────
+const http    = require('http');
+const express = require('express');
+const path    = require('path');
+const os      = require('os');
+const { server: WebSocketServer } = require('websocket');
+const { Server }    = require('colyseus');
+const { ArenaRoom } = require('./ArenaRoom');
+
+// ── HTTP ──────────────────────────────────────────────────────────────────
 const app      = express();
-const rootPath = path.join(__dirname, "..");
-const uiPath   = path.join(__dirname, "../UI");
-const gamePath = path.join(__dirname, "../game");
+const rootPath = path.join(__dirname, '..');
+const uiPath   = path.join(__dirname, '../UI');
+const gamePath = path.join(__dirname, '../game');
 
-app.use(express.static(uiPath));                         // UI/    → menu.html, pinCode.html, etc.
-app.use(express.static(gamePath));                       // game/  → game.js at /game.js
-app.use(express.static(rootPath, { index: false }));     // root/  → index.html only when explicitly requested, never as default
+app.use(express.static(uiPath));
+app.use(express.static(gamePath));
+app.use(express.static(rootPath, { index: false }));
+app.get('/', (req, res) => res.sendFile(path.join(uiPath, 'menu.html')));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(uiPath, "menu.html"));
+// Serve Colyseus SDK from node_modules — keeps LAN play fully offline-capable
+// Tries multiple possible install locations
+app.get('/colyseus.js', (req, res) => {
+  const fs = require('fs');
+  const candidates = [
+    path.resolve(__dirname, 'node_modules/@colyseus/sdk/dist/colyseus.js'),
+    path.resolve(__dirname, '../node_modules/@colyseus/sdk/dist/colyseus.js'),
+    path.resolve(__dirname, 'node_modules/colyseus.js/dist/colyseus.js'),
+    path.resolve(__dirname, '../node_modules/colyseus.js/dist/colyseus.js'),
+  ];
+  const found = candidates.find(p => fs.existsSync(p));
+  if (found) {
+    res.sendFile(found);
+  } else {
+    console.warn('[Server] colyseus.js not found in node_modules. Run: npm install colyseus @colyseus/schema');
+    res.status(404).send('// colyseus.js not found — run npm install colyseus @colyseus/schema');
+  }
 });
+
 function getLocalIp() {
   const nets = os.networkInterfaces();
-
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      const isIPv4 = net.family === "IPv4" || net.family === 4;
-      if (isIPv4 && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-
-  return "localhost";
+  for (const name of Object.keys(nets))
+    for (const net of nets[name])
+      if ((net.family === 'IPv4' || net.family === 4) && !net.internal) return net.address;
+  return 'localhost';
 }
 
-const PORT = 9091;
-const HOST = "0.0.0.0";
-
-app.listen(PORT, HOST, () => {
-  const localIp = getLocalIp();
-
-  console.log(`HTTP  → http://localhost:${PORT}`);
-  console.log(`LAN   → http://${localIp}:${PORT}`);
+app.listen(9091, '0.0.0.0', () => {
+  console.log(`HTTP     -> http://localhost:9091`);
+  console.log(`LAN      -> http://${getLocalIp()}:9091`);
 });
-// ── WebSocket server ──────────────────────────────────────────────────────
-const httpServer = http.createServer();
-httpServer.listen(9090, () => console.log("WebSocket → ws://localhost:9090"));
 
-const wsServer = new WebSocketServer({ httpServer });
+// ── Colyseus — authoritative game server ─────────────────────────────────
+const gameServer = new Server();
+gameServer.define('arena', ArenaRoom);
+gameServer.listen(2567, '0.0.0.0').then(() => {
+  console.log(`Colyseus -> ws://localhost:2567`);
+  console.log(`Colyseus -> ws://${getLocalIp()}:2567  (LAN)`);
+});
 
-// clientId → { connection, username }
+// ── Lobby WebSocket — port 9090 (ORIGINAL CODE, UNTOUCHED) ───────────────
+// pinCode.html and characterSelection.html connect here.
+// Do not modify — this serves the existing lobby flow.
+
+const lobbyHttp = http.createServer();
+lobbyHttp.listen(9090, () => console.log('Lobby WS -> ws://localhost:9090'));
+const wsServer  = new WebSocketServer({ httpServer: lobbyHttp });
+
 const clients = {};
-// gameId (4-char PIN) → { id, players: [{clientId, username, color}] }
-const games = {};
-
-const COLORS      = ["Red", "Green", "Blue", "Yellow"];
+const games   = {};
+const COLORS      = ['Red', 'Green', 'Blue', 'Yellow'];
 const MAX_PLAYERS = 4;
 const MIN_START   = 2;
 
-// ── Helper: send JSON to a single connection ──────────────────────────────
-function send(conn, payload) {
-  try { conn.send(JSON.stringify(payload)); } catch {}
-}
+const send   = (conn, p)      => { try { conn.send(JSON.stringify(p)); } catch {} };
+const bcast  = (game, p)      => game.players.forEach(pl => { const c = clients[pl.clientId]; if (c) send(c.connection, p); });
 
-// ── Helper: send JSON to everyone in a game ───────────────────────────────
-function broadcast(game, payload) {
-  game.players.forEach(p => {
-    const c = clients[p.clientId];
-    if (c) send(c.connection, payload);
-  });
-}
+const publicGame = game => ({
+  id:      game.id,
+  players: game.players.map(p => ({
+    clientId:  p.clientId,
+    username:  p.username,
+    color:     p.color,
+    ready:     p.ready,
+    character: p.character,
+  })),
+});
 
+<<<<<<< HEAD
 // ── Helper: strip internal clientIds before sending to browsers ───────────
 function publicGame(game) {
   return {
@@ -86,141 +113,82 @@ function publicGame(game) {
 // ── Helper: generate a random 4-character room PIN ────────────────────────
 function makePin() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/1/0 confusion
+=======
+const makePin = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+>>>>>>> 6d7de8c (maybe something)
   let pin;
-  do {
-    pin = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  } while (games[pin]); // ensure uniqueness
+  do { pin = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''); }
+  while (games[pin]);
   return pin;
-}
+};
 
-// ── Helper: generate a unique client ID ──────────────────────────────────
-function makeId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-// ── WebSocket connections ─────────────────────────────────────────────────
-wsServer.on("request", request => {
+wsServer.on('request', request => {
   const conn     = request.accept(null, request.origin);
+<<<<<<< HEAD
   let clientId = makeId();
+=======
+  const clientId = Math.random().toString(36).slice(2, 10);
+>>>>>>> 6d7de8c (maybe something)
   clients[clientId] = { connection: conn, username: null };
+  send(conn, { method: 'connect', clientId });
 
-  // Tell the browser its assigned ID immediately
-  send(conn, { method: "connect", clientId });
-
-  // ── Disconnect: clean up the client from any game they were in ──────────
-  conn.on("close", () => {
+  conn.on('close', () => {
     for (const game of Object.values(games)) {
       const before = game.players.length;
-      game.players = game.players.filter(p => p.clientId !== clientId);
-      if (game.players.length !== before) {
-        broadcast(game, { method: "playerLeft", game: publicGame(game) });
-      }
+      game.players  = game.players.filter(p => p.clientId !== clientId);
+      if (game.players.length !== before) bcast(game, { method: 'playerLeft', clientId, game: publicGame(game) });
     }
     delete clients[clientId];
   });
 
-  // ── Incoming messages ────────────────────────────────────────────────────
-  // Use `clientId` from the closure — never trust the payload's clientId.
-  conn.on("message", raw => {
+  conn.on('message', raw => {
     let msg;
     try { msg = JSON.parse(raw.utf8Data); } catch { return; }
-
-    const { method, username } = msg;
-    const client = clients[clientId]; // closure ID, always valid
+    const client = clients[clientId];
     if (!client) return;
+    if (msg.username) client.username = msg.username;
 
-    // Save username whenever it arrives
-    if (username) client.username = username;
-
-    // ── CREATE: host starts a new room ──────────────────────────────────
-    if (method === "create") {
-      const pin   = makePin();
-      const color = COLORS[0];
-      games[pin]  = { id: pin, players: [{ clientId, username: client.username || "Host", color, ready: false, character: null }] };
-
-      const pg = publicGame(games[pin]);
-      send(conn, { method: "create", gameId: pin, game: pg });
-      send(conn, { method: "join",   gameId: pin, game: pg, yourColor: color });
+    if (msg.method === 'create') {
+      const pin  = makePin();
+      games[pin] = { id: pin, players: [{ clientId, username: client.username || 'Host', color: COLORS[0], ready: false, character: null }] };
+      const pg   = publicGame(games[pin]);
+      send(conn, { method: 'create', gameId: pin, game: pg });
+      send(conn, { method: 'join',   gameId: pin, game: pg, yourColor: COLORS[0] });
     }
 
-    // ── JOIN: player joins with a PIN ───────────────────────────────────
-    if (method === "join") {
-      const pin  = (msg.gameId || "").trim().toUpperCase();
+    if (msg.method === 'join') {
+      const pin  = (msg.gameId || '').trim().toUpperCase();
       const game = games[pin];
-
-      if (!game) {
-        send(conn, { method: "error", message: "Room not found. Check the code and try again." });
-        return;
-      }
-      if (game.players.length >= MAX_PLAYERS) {
-        send(conn, { method: "error", message: "This room is full (6/6 players)." });
-        return;
-      }
-      if (game.players.find(p => p.clientId === clientId)) {
-        send(conn, { method: "error", message: "You are already in this game." });
-        return;
-      }
-
+      if (!game)                                           { send(conn, { method: 'error', message: 'Room not found.' }); return; }
+      if (game.players.length >= MAX_PLAYERS)              { send(conn, { method: 'error', message: 'Room is full.' }); return; }
+      if (game.players.find(p => p.clientId === clientId)) { send(conn, { method: 'error', message: 'Already in room.' }); return; }
       const color = COLORS[game.players.length];
       game.players.push({ clientId, username: client.username || `Player ${game.players.length + 1}`, color, ready: false, character: null });
-
       const pg = publicGame(game);
-      broadcast(game, { method: "join",   gameId: pin, game: pg });
-      send(conn,       { method: "joined", gameId: pin, game: pg, yourColor: color });
+      bcast(game, { method: 'join',   gameId: pin, game: pg });
+      send(conn,  { method: 'joined', gameId: pin, game: pg, yourColor: color });
     }
 
-    // ── READY: toggle ready + save Hero/Villain choice ───────────────────
-    if (method === "ready") {
-      const game = games[msg.gameId];
-      if (!game) return;
-      const player = game.players.find(p => p.clientId === clientId);
-      if (!player) return;
-
+    if (msg.method === 'ready') {
+      const game   = games[msg.gameId]; if (!game) return;
+      const player = game.players.find(p => p.clientId === clientId); if (!player) return;
       player.ready     = !player.ready;
       player.character = msg.character || player.character;
-
-      const pg = publicGame(game);
-      broadcast(game, { method: "ready", game: pg });
+      bcast(game, { method: 'ready', game: publicGame(game) });
     }
 
-    // ── START: host force-start override ────────────────────────────────
-    if (method === "start") {
-      const game = games[msg.gameId];
-      if (!game) return;
-      // only host can start
-      if (game.players[0]?.clientId !== clientId) {
-        send(conn, { method: 'error', message: 'Only the host can start the game.' });
-        return;
-      }
-
-      // must have at least 2 players
-      if (game.players.length < MIN_START) {
-        send(conn, { method: 'error', message: 'Need at least 2 players to start.' });
-        return;
-      }
-
-      // count villains
-      const villainCount = game.players.filter(p => {
-        const char = p.character;
-        if (!char) return false;
-        // handle both string 'Villain' and object { role: 'villain' }
-        if (typeof char === 'string') return char === 'Villain';
-        return char.role === 'villain';
-      }).length;
-
-      if (villainCount === 0) {
-        send(conn, { method: 'error', message: 'Need exactly 1 villain to start.' });
-        return;
-      }
-
-      if (villainCount > 1) {
-        send(conn, { method: 'error', message: 'Only 1 villain allowed per game.' });
-        return;
-      }
-
-      broadcast(game, { method: 'start', game: publicGame(game) });
+    if (msg.method === 'start') {
+      const game = games[msg.gameId]; if (!game) return;
+      if (game.players[0]?.clientId !== clientId) { send(conn, { method: 'error', message: 'Only host can start.' }); return; }
+      if (game.players.length < MIN_START)         { send(conn, { method: 'error', message: 'Need at least 2 players.' }); return; }
+      const vc = game.players.filter(p => p.character?.role === 'villain').length;
+      if (vc === 0) { send(conn, { method: 'error', message: 'Need 1 villain.' }); return; }
+      if (vc > 1)   { send(conn, { method: 'error', message: 'Only 1 villain allowed.' }); return; }
+      bcast(game, { method: 'start', game: publicGame(game) });
     }
 
+<<<<<<< HEAD
     if (method === 'identify') {
       const existingId = msg.clientId;
       const gameId     = msg.gameId;
@@ -306,6 +274,15 @@ wsServer.on("request", request => {
       const game = games[msg.gameId];
       if (!game) return;
       broadcast(game, { ...msg, clientId });
+=======
+    // identify — used by characterSelection.html (re-register connection)
+    if (msg.method === 'identify') {
+      const eid = msg.clientId;
+      if (!eid) return;
+      if (clients[eid]) { clients[eid].connection = conn; }
+      else { clients[eid] = { connection: conn, username: msg.username }; }
+      if (clientId !== eid) delete clients[clientId];
+>>>>>>> 6d7de8c (maybe something)
     }
   });
 });
