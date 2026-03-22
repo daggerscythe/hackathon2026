@@ -376,156 +376,199 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
+    // ── CSV → CHARACTERS → Grid ──────────────────────────────────────────
+let CHARACTERS = [];
+let selectedIdx = null;
 
-    // ── Roster ───────────────────────────────────────────────────────────
-    const CHARACTERS = [
-      { name:'Ironclad',   cls:'Warrior · Strength',    emoji:'⚔️',  str:90, dex:45, mag:20, def:80, spd:50 },
-      { name:'Ashveil',    cls:'Ranger · Precision',    emoji:'🏹',  str:60, dex:95, mag:30, def:40, spd:85 },
-      { name:'Mordwyn',    cls:'Sorcerer · Arcane',     emoji:'🔮',  str:25, dex:50, mag:98, def:30, spd:60 },
-      { name:'Seraphis',   cls:'Paladin · Holy',        emoji:'🛡️',  str:70, dex:40, mag:65, def:90, spd:40 },
-      { name:'Duskbane',   cls:'Assassin · Shadow',     emoji:'🗡️',  str:75, dex:88, mag:40, def:35, spd:95 },
-      { name:'Calyx',      cls:'Druid · Nature',        emoji:'🌿',  str:45, dex:60, mag:80, def:55, spd:65 },
-      { name:'Thornwall',  cls:'Berserker · Fury',      emoji:'🪓',  str:98, dex:35, mag:10, def:60, spd:70 },
-      { name:'Sylvara',    cls:'Witch · Illusion',      emoji:'🌙',  str:30, dex:65, mag:92, def:25, spd:75 },
-      { name:'Vaelthorn',  cls:'Knight · Iron',         emoji:'🏰',  str:80, dex:50, mag:15, def:95, spd:35 },
-      { name:'Cindra',     cls:'Pyromancer · Flame',    emoji:'🔥',  str:55, dex:55, mag:88, def:35, spd:72 },
-      { name:'Erevan',     cls:'Bard · Charm',          emoji:'🎶',  str:40, dex:70, mag:72, def:45, spd:80 },
-      { name:'Gromtide',   cls:'Shaman · Storm',        emoji:'⚡',  str:65, dex:58, mag:78, def:50, spd:60 },
-      { name:'Nyx',        cls:'Rogue · Venom',         emoji:'🕷️',  str:68, dex:90, mag:45, def:30, spd:92 },
-      { name:'Aurelion',   cls:'Mage · Light',          emoji:'✨',  str:20, dex:45, mag:100,def:28, spd:68 },
-      { name:'Ragnok',     cls:'Barbarian · Rage',      emoji:'💀',  str:95, dex:40, mag:5,  def:70, spd:55 },
-      { name:'Lirien',     cls:'Cleric · Faith',        emoji:'🕊️',  str:38, dex:48, mag:75, def:65, spd:52 },
-      { name:'Skareth',    cls:'Necromancer · Death',   emoji:'💀',  str:42, dex:52, mag:90, def:40, spd:58 },
-      { name:'Bryndis',    cls:'Valkyrie · Storm',      emoji:'⚔️',  str:82, dex:72, mag:42, def:75, spd:78 },
-      { name:'Ozryn',      cls:'Alchemist · Chaos',     emoji:'⚗️',  str:50, dex:60, mag:82, def:45, spd:62 },
-      { name:'Ferrox',     cls:'Golem · Earth',         emoji:'🗿',  str:88, dex:20, mag:10, def:99, spd:20 },
-    ];
+function csvToJson(csvString) {
+  const rows    = csvString.split("\n");
+  const headers = rows[0].split(",").map(h => h.trim());
+  const result  = [];
 
-    // Pad to fill a 10-col grid (add locked slots)
+  for (let i = 1; i < rows.length; i++) {
+    if (!rows[i].trim()) continue;
+    const values = rows[i].split(",");
+    const obj    = {};
+    for (let j = 0; j < headers.length; j++) {
+      obj[headers[j]] = values[j]?.trim() ?? '';
+    }
+    result.push(obj);
+  }
+  return result;
+}
+
+function buildGrid() {
+  const grid = document.getElementById('char-grid');
+  grid.innerHTML = '';
+
+  CHARACTERS.forEach((c, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'char-cell' + (c.locked ? ' locked' : '');
+    cell.dataset.idx = i;
+    cell.innerHTML = `
+      <span class="cell-emoji">${c.emoji}</span>
+      <span class="cell-label">${c.locked ? '???' : c.name}</span>
+    `;
+    if (!c.locked) {
+      cell.addEventListener('click',      () => selectCharacter(i));
+      cell.addEventListener('mouseenter', () => previewCharacter(i));
+    }
+    cell.style.opacity = c.locked ? '0.3' : '1';
+    grid.appendChild(cell);
+  });
+}
+
+fetch('../data.csv')
+  .then(r => r.text())
+  .then(content => {
+   const raw = csvToJson(content);
+
+    // Map CSV rows → CHARACTERS format
+    CHARACTERS = raw
+      .filter(obj => obj.isVillain === 'False')
+      .map(obj => {
+        const str = +obj.Strength || 0;
+        const def = +obj.Defense  || 0;
+        const mag = +obj.Magic    || 0;
+        const spd = +obj.Speed    || 0;
+        const pow = +obj.Power    || 0;
+
+        let cls;
+        if      (def >= 70 && spd <= 50)              cls = 'Tank';
+        else if (str >= 80 && def <= 60)              cls = 'DPS';
+        else if (pow >= 70 && str <= 20 && def <= 20) cls = 'Support';
+        else if (mag >= 80 && def <= 40)              cls = 'Mage';
+        else return null;  // ← no class = skip entirely
+
+        return { name: obj.Name, cls, emoji: '⚔️', str, dex: +obj.Intelligence || 0, mag, def, spd };
+      })
+      .filter(Boolean).slice(0, 50); ;  // strips out the nulls before padding, also stops at 50 characters
+
+    // Pad to fill a 10-col grid
     while (CHARACTERS.length % 10 !== 0) {
       CHARACTERS.push({ name:'???', cls:'', emoji:'🔒', str:0, dex:0, mag:0, def:0, spd:0, locked:true });
     }
 
-    let selectedIdx = null;
+    // ── Role Classification ─────────────────────────────────────────────
+    const tanks = [], dps = [], support = [], mage = [], no_class = [];
 
-    // ── Build grid ───────────────────────────────────────────────────────
-    const grid = document.getElementById('char-grid');
-
-    CHARACTERS.forEach((c, i) => {
-      const cell = document.createElement('div');
-      cell.className = 'char-cell' + (c.locked ? ' locked' : '');
-      cell.dataset.idx = i;
-      cell.innerHTML = `
-        <span class="cell-emoji">${c.emoji}</span>
-        <span class="cell-label">${c.locked ? '???' : c.name}</span>
-      `;
-      if (!c.locked) {
-        cell.addEventListener('click', () => selectCharacter(i));
-        cell.addEventListener('mouseenter', () => previewCharacter(i));
-      }
-      cell.style.opacity = c.locked ? '0.3' : '1';
-      grid.appendChild(cell);
-    });
-
-    // ── Preview on hover ─────────────────────────────────────────────────
-    function previewCharacter(idx) {
-      const c = CHARACTERS[idx];
-      setPreview(c);
+    for (const c of CHARACTERS) {
+      if (c.locked) continue;
+      const { name, str, def, mag, spd } = c;
+      if      (def >= 70 && spd <= 50)              tanks.push(name);
+      else if (str >= 80 && def <= 60)              dps.push(name);
+      else if (mag >= 70 && str <= 20 && def <= 20) support.push(name);
+      else if (mag >= 80 && def <= 40)              mage.push(name);
+      else                                          no_class.push(name);
     }
 
-    // ── Select on click ──────────────────────────────────────────────────
-    function selectCharacter(idx) {
-      if (CHARACTERS[idx].locked) return;
+    console.log('Tanks:',    tanks);
+    console.log('DPS:',      dps);
+    console.log('Support:',  support);
+    console.log('Mage:',     mage);
+    console.log('No class:', no_class);
 
-      // Deselect previous
-      if (selectedIdx !== null) {
-        document.querySelector(`[data-idx="${selectedIdx}"]`)?.classList.remove('selected');
-      }
-      selectedIdx = idx;
-      document.querySelector(`[data-idx="${idx}"]`).classList.add('selected');
-
-      const c = CHARACTERS[idx];
-      setPreview(c);
-      document.getElementById('selected-name-tag').textContent = c.name;
-    }
-
-    function setPreview(c) {
-      const emojiEl = document.getElementById('preview-emoji');
-      const nameEl  = document.getElementById('preview-name');
-      const clsEl   = document.getElementById('preview-class');
-
-      emojiEl.classList.add('switching');
-      setTimeout(() => {
-        emojiEl.textContent = c.emoji;
-        nameEl.textContent  = c.name;
-        clsEl.textContent   = c.cls;
-        emojiEl.classList.remove('switching');
-      }, 180);
-
-      // Stats
-      const stats = [
-        { label: 'STR', val: c.str },
-        { label: 'DEX', val: c.dex },
-        { label: 'MAG', val: c.mag },
-        { label: 'DEF', val: c.def },
-        { label: 'SPD', val: c.spd },
-      ];
-      const block = document.getElementById('stat-block');
-      block.innerHTML = stats.map(s => `
-        <div class="stat-row">
-          <span class="stat-name">${s.label}</span>
-          <div class="stat-track">
-            <div class="stat-fill" style="width:${s.val}%"></div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    // Initialise preview with first character
+    // Build grid and init preview now that data is ready
+    buildGrid();
     setPreview(CHARACTERS[0]);
+  })
+  .catch(err => console.error('Failed to load data.csv:', err));
 
-    // ── Three.js background ──────────────────────────────────────────────
-    const canvas = document.getElementById('bg-canvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, 200);
-    camera.position.set(0, 0, 14);
+// ── Preview on hover ──────────────────────────────────────────────────
+function previewCharacter(idx) {
+  setPreview(CHARACTERS[idx]);
+}
 
-    const wireFaint = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.055 });
+// ── Select on click ───────────────────────────────────────────────────
+function selectCharacter(idx) {
+  if (CHARACTERS[idx].locked) return;
 
-    const floaters = [];
-    for (let i = 0; i < 8; i++) {
-      const geo = new THREE.PlaneGeometry(3+Math.random()*7, 2+Math.random()*6, Math.floor(3+Math.random()*5), Math.floor(3+Math.random()*5));
-      const mesh = new THREE.Mesh(geo, wireFaint);
-      mesh.position.set((Math.random()-0.5)*28, (Math.random()-0.5)*18, -10-Math.random()*14);
-      mesh.rotation.set((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, Math.random()*Math.PI);
-      mesh.userData.axis = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
-      mesh.userData.speed = 0.0004 + Math.random()*0.0008;
-      scene.add(mesh); floaters.push(mesh);
-    }
+  if (selectedIdx !== null) {
+    document.querySelector(`[data-idx="${selectedIdx}"]`)?.classList.remove('selected');
+  }
+  selectedIdx = idx;
+  document.querySelector(`[data-idx="${idx}"]`).classList.add('selected');
 
-    function animate() {
-      requestAnimationFrame(animate);
-      for (const f of floaters) f.rotateOnAxis(f.userData.axis, f.userData.speed);
-      renderer.render(scene, camera);
-    }
-    animate();
+  const c = CHARACTERS[idx];
+  setPreview(c);
+  document.getElementById('selected-name-tag').textContent = c.name;
+}
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+function setPreview(c) {
+  const emojiEl = document.getElementById('preview-emoji');
+  const nameEl  = document.getElementById('preview-name');
+  const clsEl   = document.getElementById('preview-class');
 
-    // ── Nav ──────────────────────────────────────────────────────────────
-    function confirmSelection() {
-      if (selectedIdx === null) { alert('Choose a champion first.'); return; }
-      alert(`Champion chosen: ${CHARACTERS[selectedIdx].name}\n\nThe adventure begins…`);
-      window.location.href = "../index.html"
-    }
-    function goBack() { window.location.href = 'mode-select.html'; }
+  emojiEl.classList.add('switching');
+  setTimeout(() => {
+    emojiEl.textContent = c.emoji;
+    nameEl.textContent  = c.name;
+    clsEl.textContent   = c.cls;
+    emojiEl.classList.remove('switching');
+  }, 180);
+
+  const stats = [
+    { label: 'STR', val: c.str },
+    { label: 'DEX', val: c.dex },
+    { label: 'MAG', val: c.mag },
+    { label: 'DEF', val: c.def },
+    { label: 'SPD', val: c.spd },
+  ];
+  const block = document.getElementById('stat-block');
+  block.innerHTML = stats.map(s => `
+    <div class="stat-row">
+      <span class="stat-name">${s.label}</span>
+      <div class="stat-track">
+        <div class="stat-fill" style="width:${s.val}%"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Three.js background ───────────────────────────────────────────────
+const canvas   = document.getElementById('bg-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 0, 14);
+
+const wireFaint = new THREE.MeshBasicMaterial({ color: 0xc9a84c, wireframe: true, transparent: true, opacity: 0.055 });
+
+const floaters = [];
+for (let i = 0; i < 8; i++) {
+  const geo  = new THREE.PlaneGeometry(3+Math.random()*7, 2+Math.random()*6, Math.floor(3+Math.random()*5), Math.floor(3+Math.random()*5));
+  const mesh = new THREE.Mesh(geo, wireFaint);
+  mesh.position.set((Math.random()-0.5)*28, (Math.random()-0.5)*18, -10-Math.random()*14);
+  mesh.rotation.set((Math.random()-0.5)*1.5, (Math.random()-0.5)*1.5, Math.random()*Math.PI);
+  mesh.userData.axis  = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
+  mesh.userData.speed = 0.0004 + Math.random()*0.0008;
+  scene.add(mesh);
+  floaters.push(mesh);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  for (const f of floaters) f.rotateOnAxis(f.userData.axis, f.userData.speed);
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Nav ───────────────────────────────────────────────────────────────
+function confirmSelection() {
+  if (selectedIdx === null) { alert('Choose a champion first.'); return; }
+  alert(`Champion chosen: ${CHARACTERS[selectedIdx].name}\n\nThe adventure begins…`);
+}
+function goBack() { window.location.href = 'mode-select.html'; }
+  
+
 
   </script>
 </body>

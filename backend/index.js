@@ -130,7 +130,7 @@ wsServer.on("request", request => {
       send(conn,       { method: "joined", gameId: pin, game: pg, yourColor: color });
     }
 
-    // ── START: host launches the game ───────────────────────────────────
+    // when method is start, start the game
     if (method === "start") {
       const game = games[msg.gameId];
       if (!game) return;
