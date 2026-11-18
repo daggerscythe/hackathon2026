@@ -25,7 +25,7 @@ const Roster = (() => {
     Villain: [
       { cls: 'Mage',    test: c => c.mag >= 75 && c.str < 60 },
       { cls: 'Brute',   test: c => c.str >= 75 },
-      { cls: 'Agile',   test: c => c.spd >= 70 },
+      { cls: 'Agile',   test: c => c.spd >= 70 && c.str >= 45 },
     ],
   };
 

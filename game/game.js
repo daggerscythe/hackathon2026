@@ -102,12 +102,19 @@ function getState() {
 // =====================================
 // Character Data Model
 // =====================================
-const BASE_HEALTH             = 100;
-const BASE_DAMAGE             = 25;
-const BASE_DAMAGE_MAGIC       = 35;
-const MIN_DAMAGE              = 3;
-const VILLAIN_HEALTH_PER_KILL = 30;
-const BASE_HEAL_RATE          = 15;
+const BASE_HEALTH       = 100;
+const BASE_DAMAGE       = 10;   // melee, × Strength
+const BASE_DAMAGE_MAGIC = 15;   // fireball, × Magic
+const MIN_DAMAGE        = 1;
+const MAX_DEFENSE_BLOCK = 0.6;  // 100 Defense blocks 60% of a hit — nobody is unkillable
+const BASE_HEAL_RATE    = 20;   // per heal, × Power
+
+// Goliath is one character against up to three, so it scales with the hero count
+const VILLAIN_BASE_HEALTH     = 150;
+const VILLAIN_HEALTH_PER_HERO = 80;   // 1 hero → 230 HP, 3 heroes → 390 HP
+const VILLAIN_DAMAGE_MULT     = 1.3;  // slow, heavy swings…
+const VILLAIN_MAX_CLEAVE      = 2;    // …that hit up to two heroes at once
+const VILLAIN_HEAL_PER_KILL   = 0.15; // fraction of max HP regained per hero defeated
 
 // CSV speed (0-100) → movement multiplier. Kept in a 0.6x–1.4x band so a
 // low-speed character is slow but still playable.
@@ -162,8 +169,9 @@ function isAlive(id) {
 // =====================================
 function calcDamage(attacker, defender, attackType) {
     const base      = attackType === 'magic' ? BASE_DAMAGE_MAGIC : BASE_DAMAGE;
-    const rawDamage = base * attacker[attackType];
-    return Math.max(MIN_DAMAGE, rawDamage * (1 - defender.defense));
+    const roleMult  = attacker.role === 'villain' ? VILLAIN_DAMAGE_MULT : 1;
+    const rawDamage = base * attacker[attackType] * roleMult;
+    return Math.max(MIN_DAMAGE, rawDamage * (1 - MAX_DEFENSE_BLOCK * defender.defense));
 }
 
 /**
@@ -220,7 +228,7 @@ function handleDeath(id, killerId = null) {
     if (char.role === 'hero') {
         const villain = [...characters.values()].find(c => c.role === 'villain');
         if (villain && villain.isAlive) {
-            applyHealAmount(villain.id, VILLAIN_HEALTH_PER_KILL, villain.id);
+            applyHealAmount(villain.id, villain.maxHealth * VILLAIN_HEAL_PER_KILL, villain.id);
         }
     }
 
@@ -249,6 +257,13 @@ function initMatch(villainId, heroIds) {
         startTime: Date.now(),
         endTime:   null,
     };
+
+    // every client derives the same villain health from the same roster
+    const villain = characters.get(villainId);
+    if (villain) {
+        villain.maxHealth = villain.health =
+            VILLAIN_BASE_HEALTH + VILLAIN_HEALTH_PER_HERO * matchState.heroIds.length;
+    }
 
     transitionTo(STATES.BATTLE);
     emit(GAME_EVENTS.MATCH_STARTED, { villainId, heroIds: matchState.heroIds });
@@ -300,10 +315,17 @@ function awardExp(winnerRole) {
 // Combat System
 // =====================================
 const COOLDOWNS = {
-    melee: 300,
-    magic: 1500,
-    heal:  5000,
+    melee:        500,
+    villainMelee: 800,
+    magic:        1500,
+    heal:         5000,
 };
+
+/** Cooldown length in ms for this character's ability. */
+function cooldownDuration(id, ability) {
+    if (ability === 'melee' && characters.get(id)?.role === 'villain') return COOLDOWNS.villainMelee;
+    return COOLDOWNS[ability];
+}
 
 const CLASS_ATTACK_TYPE = {
     tank:         'strength',
@@ -315,8 +337,9 @@ const CLASS_ATTACK_TYPE = {
     // support has no attack — heal only
 };
 
-const MAGIC_CLASSES = ['mage', 'villain_mage'];
-const MELEE_RANGE   = 4;   // how close you need to be to melee
+const MAGIC_CLASSES   = ['mage', 'villain_mage'];
+const MELEE_RANGE     = 4;                    // how close you need to be to melee
+const MELEE_HALF_ARC  = THREE.MathUtils.degToRad(60); // swings hit within ±60° of facing
 
 // characterId → { melee, magic, heal } timestamps
 const cooldownTracker = new Map();
@@ -328,7 +351,7 @@ function initCooldowns(id) {
 function getCooldownRemaining(id, ability) {
     const tracker = cooldownTracker.get(id);
     if (!tracker) return 0;
-    return Math.max(0, COOLDOWNS[ability] - (Date.now() - tracker[ability]));
+    return Math.max(0, cooldownDuration(id, ability) - (Date.now() - tracker[ability]));
 }
 
 function isOnCooldown(id, ability) {
@@ -341,10 +364,13 @@ function startCooldown(id, ability) {
 }
 
 /**
- * Swing a melee attack: hits every living enemy within MELEE_RANGE.
+ * Swing a melee attack: hits every living enemy within MELEE_RANGE in front
+ * of the attacker.
+ * @param {string} attackerId
+ * @param {number} [facingYaw] - camera-style yaw the attacker faces; omit to hit all around
  * Returns an array of { targetId, damage } for the hits that landed.
  */
-function performMeleeSwing(attackerId) {
+function performMeleeSwing(attackerId, facingYaw) {
     const attacker = characters.get(attackerId);
     if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return [];
     if (isOnCooldown(attackerId, 'melee')) return [];
@@ -356,13 +382,29 @@ function performMeleeSwing(attackerId) {
     if (!attackerEl) return [];
     const myPos = attackerEl.object3D.position;
 
-    const hits = [];
+    // living enemies in reach (and in front, when a facing is given), nearest first
+    const inReach = [];
     characters.forEach(target => {
         if (target.role === attacker.role || !target.isAlive) return;
         const targetEl = document.getElementById(target.entityId);
         if (!targetEl) return;
-        if (myPos.distanceTo(targetEl.object3D.position) > MELEE_RANGE) return;
+        const tp   = targetEl.object3D.position;
+        const dist = myPos.distanceTo(tp);
+        if (dist > MELEE_RANGE) return;
+        if (facingYaw !== undefined) {
+            // camera-style yaw: forward is (-sin, -cos)
+            const dx = tp.x - myPos.x, dz = tp.z - myPos.z;
+            const len = Math.hypot(dx, dz);
+            const dot = len < 0.5 ? 1 : (-Math.sin(facingYaw) * dx - Math.cos(facingYaw) * dz) / len;
+            if (dot < Math.cos(MELEE_HALF_ARC)) return;
+        }
+        inReach.push({ target, dist });
+    });
+    inReach.sort((a, b) => a.dist - b.dist);
+    if (attacker.role === 'villain') inReach.length = Math.min(inReach.length, VILLAIN_MAX_CLEAVE);
 
+    const hits = [];
+    inReach.forEach(({ target }) => {
         const damage = applyHit(attackerId, target.id, 'strength');
         if (damage > 0) {
             hits.push({ targetId: target.id, damage });

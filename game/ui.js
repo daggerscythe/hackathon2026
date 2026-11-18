@@ -1193,7 +1193,7 @@ function startCooldownLoop(charId) {
     Object.entries(_cdEls).forEach(([ab, el]) => {
       const cdKey     = CD_CONFIG[ab].cooldown;
       const remaining = getCooldownRemaining(_localCdId, cdKey);
-      const total     = COOLDOWNS[cdKey];
+      const total     = cooldownDuration(_localCdId, cdKey);
       const frac      = total > 0 ? remaining / total : 0;
 
       el.sweep.style.transform = `scaleY(${frac})`;

@@ -154,7 +154,8 @@ AFRAME.registerComponent('attack-input', {
   },
 
   doMelee() {
-    const hits = performMeleeSwing(LOCAL_ID);
+    const angles = getCameraAngles();
+    const hits = performMeleeSwing(LOCAL_ID, angles ? angles.y : undefined);
     if (typeof sendAttackEvent === 'function') {
       hits.forEach(h => sendAttackEvent('melee', h.targetId, h.damage));
     }

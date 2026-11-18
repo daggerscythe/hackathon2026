@@ -1,85 +1,81 @@
 # Slaying Goliath
 **A Hackathon Project · OleMiss CS**
 
-A 3v1 asymmetric multiplayer hero fighter built with A-Frame and WebSockets.
+A 3v1 asymmetric arena brawler built with A-Frame. Play solo against bots in the browser, or online with up to 4 friends.
 
 ---
 
 ## Win/Lose Condition
 | Side | Win Condition | Lose Condition |
 |------|--------------|----------------|
-| **Heroes (×3)** | Reduce the villain's HP to 0 | All 3 heroes are defeated |
-| **Villain (×1)** | Defeat all 3 heroes | HP reaches 0 |
+| **Heroes (×1–3)** | Reduce Goliath's HP to 0 | All heroes are defeated |
+| **Goliath (×1)** | Defeat every hero | HP reaches 0 |
 
-If the 3-minute round timer expires, **heroes win** — the villain failed to eliminate them in time.
+If the 3-minute round timer expires, **heroes win**: Goliath failed to eliminate them in time.
 
 ---
 
 ## Gameplay loop
 ```
-Menu → Mode Select → PIN Lobby → Character Select → Battle → Game Over
-
-↓
-
-Return to Character Select
+Menu → Mode Select ─┬─ Fate of Goliath (solo) → Solo Setup ─┬→ Battle → Game Over → Menu
+                    └─ Skirmish (online)      → PIN Lobby  ─┘
 ```
-1. **Lobby** — players join via a shared PIN code. One player selects villain, up to three select heroes.
-2. **Character Select** — each player chooses a class. A character is randomly assigned from the CSV pool matching that class.
-3. **Battle** — 3-minute round. Heroes cooperate to defeat the villain. Villain must eliminate all heroes before time runs out.
-4. **Game Over** — winning side is declared, EXP is awarded, players return to character select.
+1. **Solo:** pick a side, a class, how many fighters are in the arena (2–4) and bot difficulty. Bots fill the other slots.
+2. **Online:** players join a lobby with a shared PIN. One picks Goliath, the rest pick heroes; the host starts.
+3. **Character:** you pick a class and get a character from `data.csv` in that class. Its stats drive everything.
+4. **Battle:** a 3-minute round in the arena.
 
 ---
 
 ## Classes
 
 ### Hero Classes
-| Class | Primary Attack | Role |
-|-------|---------------|------|
-| Tank | Melee (sword) | High defense frontliner |
-| DPS | Melee (sword) | High strength damage dealer |
-| Support | Melee (sword) | Healer — can heal self or allies |
-| Mage | Magic (fireball) | Ranged spell caster |
+| Class | Attack | Role |
+|-------|--------|------|
+| Tank | Melee (sword) | High-defense frontliner |
+| DPS | Melee (sword) | High-strength damage dealer |
+| Support | Heals | LMB heals the nearest ally, RMB heals yourself |
+| Mage | Fireball | Ranged spell caster |
 
-### Villain Classes
-| Class | Primary Attack | Role |
-|-------|---------------|------|
-| Brute | Melee (sword) | High strength brawler |
-| Agile | Melee (sword) | Fast, light hitter |
-| Mage | Magic (fireball) | Ranged spell caster |
+### Goliath (Villain) Classes
+| Class | Attack | Role |
+|-------|--------|------|
+| Brute | Melee (sword) | Heavy hitter |
+| Agile | Melee (sword) | Fast hunter |
+| Mage | Fireball | Ranged spell caster |
 
 ---
 
 ## Combat System
 
 ### Base Stats
-- All players start with **100 HP**
-- Base damage is **10** per hit
+- Heroes start with **100 HP**
+- Goliath starts with **150 + 80 per hero** (230 HP vs 1 hero, 390 HP vs 3)
 
-### Stat Formulas (CSV values are percentages, 0-100)
-| Stat | Formula | Example |
-|------|---------|---------|
-| **Strength** (melee damage) | `BASE_DAMAGE × (strength / 100)` | strength 70 → deals 7 raw damage |
-| **Magic** (ranged damage) | `BASE_DAMAGE × (magic / 100)` | magic 80 → deals 8 raw damage |
-| **Defense** (damage reduction) | `raw_damage × (1 - defense / 100)` | defense 70 → takes 30% of incoming damage |
-| **Speed** (movement) | `BASE_SPEED × (speed / 100)` | speed 50 → moves at half speed |
-| **Power** (healing) | `5 × (power / 100)` HP per second | power 70 → heals 3.5 HP/sec |
+### Stat Formulas (CSV values are 0–100)
+| Stat | Effect |
+|------|--------|
+| **Strength** | Melee damage: `10 × Strength/100` |
+| **Magic** | Fireball damage: `15 × Magic/100` |
+| **Defense** | Damage taken: `× (1 − 0.6 × Defense/100)`, so even 100 Defense only blocks 60% |
+| **Speed** | Movement: `5 × (0.6 + 0.8 × Speed/100)` units/sec |
+| **Power** | Heal amount: `20 × Power/100` HP |
 
-### Final Damage Formula
-```
-raw_damage   = BASE_DAMAGE × attacker_stat / 100
-damage_taken = raw_damage  × (1 - defender_defense / 100)
-```
+### Goliath rules
+- Goliath's hits deal **×1.3** damage and cleave up to **2 heroes** in front of it, but it swings slower.
+- Goliath regains **15% of max HP** for every hero it defeats.
 
-### Villain Scaling
-The villain gains **+50 HP** each time a hero is defeated, rewarding aggressive play.
- 
+### Melee
+Melee hits enemies within 4 units and inside a 120° arc in front of you.
+
 ### Cooldowns
 | Ability | Cooldown |
 |---------|----------|
-| Magic attack | 3 seconds |
-| Heal | 5 seconds |
-| Melee attack | None |
- 
+| Hero melee | 0.5 s |
+| Goliath melee | 0.8 s |
+| Fireball | 1.5 s |
+| Heal | 5 s |
+
 ---
 
 ## Controls
@@ -87,36 +83,50 @@ The villain gains **+50 HP** each time a hero is defeated, rewarding aggressive 
 |--------|-----|
 | Move | WASD |
 | Jump | Space |
-| Attack / Heal Ally | LMB |
-| Heal Self (Support only) | RMB |
-| Look | Mouse |
+| Look | Mouse (click the arena to lock the cursor; Esc releases it) |
+| Attack / Heal ally | LMB |
+| Heal self (Support only) | RMB |
 
-## CSV integration:
-Characters are loaded from `data.csv`. Each row represents a playable character.
- 
+---
+
+## CSV integration
+Characters are loaded from `data.csv` (~780 rows) by `game/roster.js`. Each row is a playable character.
+
 ### Parsed Fields
 | Field | Type | Usage |
 |-------|------|-------|
 | `Name` | string | Display name |
-| `Strength` | 0–100 | Melee damage multiplier |
-| `Magic` | 0–100 | Ranged damage multiplier |
-| `Defense` | 0–100 | Damage reduction multiplier |
-| `Speed` | 0–100 | Movement speed multiplier |
-| `Power` | 0–100 | Healing rate multiplier |
+| `Strength` | 0–100 | Melee damage |
+| `Magic` | 0–100 | Fireball damage |
+| `Defense` | 0–100 | Damage reduction |
+| `Speed` | 0–100 | Movement speed |
+| `Power` | 0–100 | Healing amount |
+| `isVillain` | bool | Hero or Goliath pool |
 
 ### Class Assignment
-Characters are classified at load time by their stats. A player picks a class during character select, then receives a **randomly assigned character** from that class pool.
- 
-| Class | Classification Rules |
-|-------|---------------------|
-| Tank | Defense ≥ 70, Speed ≤ 50 |
-| DPS | Strength ≥ 80, Defense ≤ 60 |
-| Support | Power ≥ 70, Strength ≤ 20, Defense ≤ 20 |
-| Hero Mage | Magic ≥ 80, Defense ≤ 40 |
-| Brute | isVillain, Strength ≥ 80 |
-| Agile | isVillain, Speed ≥ 80 |
-| Villain Mage | isVillain, Magic ≥ 80 |
- 
+Each character is put in the first class whose rule it matches. Each class is defined by the stat its abilities use.
+
+| Side | Class | Rule | Pool |
+|------|-------|------|------|
+| Hero | Support | Power ≥ 70, Strength ≤ 40 | 51 |
+| Hero | Mage | Magic ≥ 75, Strength < 60 | 42 |
+| Hero | Tank | Defense ≥ 70 | 89 |
+| Hero | DPS | Strength ≥ 70 | 77 |
+| Goliath | Mage | Magic ≥ 75, Strength < 60 | 51 |
+| Goliath | Brute | Strength ≥ 75 | 102 |
+| Goliath | Agile | Speed ≥ 70, Strength ≥ 45 | 36 |
+
+---
+
+## Bots (solo mode)
+`game/bot-ai.js` drives bots with the same combat functions as players, so stats and cooldowns apply to them unchanged.
+- **Melee bots** chase their target and circle it once in reach.
+- **Casters** keep 7–12 units away, back off from whoever is closest, and lead their shots.
+- **Supports** follow the most injured ally and heal.
+- **Goliath bots** hunt the weakest nearby hero.
+
+Difficulty sets how often bots re-plan, how accurately they aim, how quickly they swing, and how much they dodge.
+
 ---
 
 ## Tech Stack
@@ -125,7 +135,7 @@ Characters are classified at load time by their stats. A player picks a class du
 | 3D Engine | A-Frame 1.5.0 |
 | Physics | aframe-physics-system (c-frame fork) |
 | Multiplayer | WebSockets |
-| Data | CSV (Papa Parse) |
+| Data | CSV (custom parser in `game/roster.js`) |
 | Models | Custom low-poly GLB (Three.js) |
  
 ---

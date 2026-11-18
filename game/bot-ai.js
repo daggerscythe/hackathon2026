@@ -253,7 +253,7 @@ AFRAME.registerComponent('bot-brain', {
 
     if (time < this.nextSwing || isOnCooldown(me.id, 'melee')) return;
     if (this.dist(me, target) > MELEE_RANGE - 0.2) return;
-    performMeleeSwing(me.id);
+    performMeleeSwing(me.id, this.faceYaw);
     this.nextSwing = time + this.cfg.swingDelay * (0.6 + Math.random() * 0.8);
   },
 
