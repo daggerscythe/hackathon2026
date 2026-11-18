@@ -140,6 +140,16 @@ Difficulty sets how often bots re-plan, how accurately they aim, how quickly the
  
 ---
 
+## Asset credits
+| Asset | Author | License |
+|-------|--------|---------|
+| [Low poly Sword 3D Model](https://sketchfab.com/3d-models/low-poly-sword-3d-model-9cfcd357cd3743f5b893b659ef42a05d) (`assets/models/sword.glb`) | Omkar_suryavanshi | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| [Low Poly FireBall](https://sketchfab.com/3d-models/low-poly-fireball-boule-de-feu-en-low-poly-b722efe7ec084dafbe41427714dc5711) (`assets/models/fireball.glb`) | Dzénetan Massart | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| Character and arena models | Generated with `tools/` | Project's own |
+| Character data (`data.csv`) | Provided by the hackathon | — |
+
+---
+
 ## Team
 | Name | Role |
 |------|------|
