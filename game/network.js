@@ -1,37 +1,20 @@
 // ============================================
-// NETWORK — multiplayer sync over WebSocket
-// Depends on game.js. Remote players are created by match-setup.js.
+// NETWORK — multiplayer sync (messages go through transport.js)
+// Depends on game.js and transport.js. Remote players are created by
+// match-setup.js. In solo mode every send is a no-op.
 //
 // Every client simulates its own character and reports the results
-// (damage dealt, heals, deaths) to the others through the server relay.
+// (damage dealt, heals, deaths) to the others through the relay.
 // ============================================
 
-const GAME_ID    = sessionStorage.getItem('gameId');
-const SERVER_URL = sessionStorage.getItem('serverUrl');
-const SEND_RATE  = 50; // ms between position updates (20 Hz)
+const SEND_RATE = 50; // ms between position updates (20 Hz)
 
 const remoteTargets = {}; // entityId → { position, rotation }
 
-let ws = null;
-
-function wsSend(method, payload = {}) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ method, clientId: LOCAL_ID, gameId: GAME_ID, ...payload }));
-}
-
 function connectToGame() {
-  if (!SERVER_URL || !GAME_ID) return;
-
-  ws = new WebSocket(SERVER_URL);
-  ws.onopen  = () => wsSend('identify', { username: sessionStorage.getItem('lobbyUsername') });
-  ws.onerror = (e) => console.error('[Network] WebSocket error', e);
-  ws.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
-    const handler = MESSAGE_HANDLERS[msg.method];
-    if (handler) handler(msg);
-  };
-
+  if (!Net.isMultiplayer) return;
+  Object.entries(MESSAGE_HANDLERS).forEach(([method, fn]) => Net.on(method, fn));
+  Net.connect();
   setInterval(sendPosition, SEND_RATE);
 }
 
@@ -44,7 +27,7 @@ function sendPosition() {
   if (!playerEl || !angles) return;
 
   const pos = playerEl.object3D.position;
-  wsSend('playerMove', {
+  Net.send('playerMove', {
     position: { x: pos.x, y: pos.y, z: pos.z },
     rotation: { y: angles.y },
   });
@@ -52,29 +35,29 @@ function sendPosition() {
 
 /** Report damage this client dealt to another character. */
 function sendAttackEvent(attackType, targetId, damage) {
-  wsSend('playerAttack', { attackType, targetId, damage });
+  Net.send('playerAttack', { attackType, targetId, damage });
 }
 
 /** Report a heal this client performed. */
 function sendHealEvent(targetId, amount) {
-  wsSend('playerHeal', { targetId, amount });
+  Net.send('playerHeal', { targetId, amount });
 }
 
 /** Visual-only sync (e.g. a fireball the others should see). */
 function sendAbilityCast(ability, payload = {}) {
-  wsSend('abilityCast', { ability, ...payload });
+  Net.send('abilityCast', { ability, ...payload });
 }
 
 // local player died → tell everyone
 onCharacterDefeated(({ characterId }) => {
-  if (characterId === LOCAL_ID) wsSend('playerDied', { characterId });
+  if (characterId === LOCAL_ID) Net.send('playerDied', { characterId });
 });
 
 // this client decided the match result → tell everyone (never echo remote results).
 // Deferred one tick so the killing blow's playerAttack/playerHeal message,
 // sent right after the hit resolves, reaches the others first.
 onMatchOver(({ winner, duration, remote }) => {
-  if (!remote) setTimeout(() => wsSend('matchOver', { winner, duration }), 0);
+  if (!remote) setTimeout(() => Net.send('matchOver', { winner, duration }), 0);
 });
 
 // ============================================
