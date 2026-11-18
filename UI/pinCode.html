@@ -272,6 +272,7 @@
   </style>
 
     <script src="../game/audio.js"></script>
+    <script src="../game/roster.js"></script>
     <script src="../game/consistent_audio.js"></script>
 </head>
 <body>
@@ -423,93 +424,17 @@
     const MAX_PLAYERS = 4;
     const MIN_START   = 2;
 
-    // ── CSV pools — populated after fetch ────────────────────────────────
-    // pools['Hero']['Tank'] = [ {name, cls, emoji, str, dex, mag, def, spd, pow}, … ]
-    const pools = { Hero: {}, Villain: {} };
-
-    const HERO_CLASSES    = ['Tank', 'DPS', 'Support', 'Mage'];
-    const VILLAIN_CLASSES = ['Brute', 'Agile', 'Mage'];
-
-    const HERO_ROLES = [
-      { cls: 'Tank',    test: c => c.def >= 70 && c.spd <= 50 },
-      { cls: 'DPS',     test: c => c.str >= 80 && c.def <= 60 },
-      { cls: 'Support', test: c => c.pow >= 70 && c.str <= 20 && c.def <= 20 },
-      { cls: 'Mage',    test: c => c.mag >= 80 && c.def <= 40 },
-    ];
-    const VILLAIN_ROLES = [
-      { cls: 'Mage',  test: c => c.mag >= 80 && c.def <= 40 },
-      { cls: 'Agile', test: c => c.spd >= 70 && c.def <= 50 },
-      { cls: 'Brute', test: c => c.def >= 70 && c.spd <= 50 },
-    ];
+    // ── CSV pools (game/roster.js) ─────────────────────────────────────
+    // pools['Hero']['Tank'] = [ {name, cls, emoji, str, mag, def, spd, pow}, … ]
+    const pools           = Roster.pools;
+    const HERO_CLASSES    = Roster.HERO_CLASSES;
+    const VILLAIN_CLASSES = Roster.VILLAIN_CLASSES;
+    Roster.load().catch(err => console.error('CSV load failed:', err));
 
     // current tab open in right panel
     let activeClassTab = null;
     // index of selected cell in current tab's pool
     let selectedCellIdx = null;
-
-    // ══════════════════════════════════════════════════════════════════════
-    // CSV LOADING
-    // ══════════════════════════════════════════════════════════════════════
-    function csvToJson(str) {
-      const rows    = str.split('\n');
-      const headers = rows[0].split(',').map(h => h.trim());
-      const result  = [];
-      for (let i = 1; i < rows.length; i++) {
-        if (!rows[i].trim()) continue;
-        const vals = rows[i].split(',');
-        const obj  = {};
-        headers.forEach((h, j) => obj[h] = vals[j]?.trim() ?? '');
-        result.push(obj);
-      }
-      return result;
-    }
-
-    function classifyChar(c, roles) {
-      // most restrictive first (Support/Schemer have 3 conditions)
-      const ordered = [...roles].sort((a, b) => {
-        const countConditions = fn => fn.toString().split('&&').length;
-        return countConditions(b.test) - countConditions(a.test);
-      });
-      for (const role of ordered) {
-        if (role.test(c)) return role.cls;
-      }
-      return null;
-    }
-
-    fetch('../data.csv')
-      .then(r => r.text())
-      .then(content => {
-        const raw = csvToJson(content);
-
-        // init pool buckets
-        HERO_CLASSES.forEach(c => pools.Hero[c] = []);
-        VILLAIN_CLASSES.forEach(c => pools.Villain[c] = []);
-
-        raw.forEach(obj => {
-          const isVillain = obj.isVillain?.trim() === 'True';
-          const side      = isVillain ? 'Villain' : 'Hero';
-          const roles     = isVillain ? VILLAIN_ROLES : HERO_ROLES;
-          const emoji     = isVillain ? '💀' : '⚔️';
-
-          const str = +obj.Strength     || 0;
-          const def = +obj.Defense      || 0;
-          const mag = +obj.Magic        || 0;
-          const spd = +obj.Speed        || 0;
-          const pow = +obj.Power        || 0;
-          const dex = +obj.Intelligence || 0;
-
-          const cls = classifyChar({ str, def, mag, spd, pow }, roles);
-          if (!cls) return;
-
-          pools[side][cls].push({ name: obj.Name, cls, emoji, str, dex, mag, def, spd, pow });
-        });
-
-        console.log('Pools ready:', {
-          Hero:    Object.fromEntries(Object.entries(pools.Hero).map(([k,v])=>[k,v.length])),
-          Villain: Object.fromEntries(Object.entries(pools.Villain).map(([k,v])=>[k,v.length])),
-        });
-      })
-      .catch(err => console.error('CSV load failed:', err));
 
     // ══════════════════════════════════════════════════════════════════════
     // RIGHT PANEL — class tabs + grid
@@ -692,33 +617,10 @@
         document.getElementById('btn-villain').disabled = false;
       }
 
-      // map our class names to game.js class names (lowercase)
-      const CLASS_MAP = {
-        // hero
-        'Tank':    'tank',
-        'DPS':     'dps',
-        'Support': 'support',
-        // villain
-        'Brute':   'brute',
-        'Agile':   'agile',
-        // shared key — disambiguate by side
-        'Mage':    mySide === 'Villain' ? 'villain_mage' : 'mage',
-      };
-
       sendWS({
         method:    'ready',
         gameId:    currentGameId,
-        character: {
-          name:    myCharacter.name,
-          cls:     CLASS_MAP[myClass] || myClass.toLowerCase(),
-          clsDisplay: myClass,
-          role:    mySide.toLowerCase(),
-          str:     myCharacter.str,
-          mag:     myCharacter.mag,
-          def:     myCharacter.def,
-          spd:     myCharacter.spd,
-          pow:     myCharacter.pow,
-        },
+        character: Roster.toGameCharacter(myCharacter, mySide),
       });
     }
 
