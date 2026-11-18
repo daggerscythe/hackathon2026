@@ -7,16 +7,16 @@
 // resolve asset paths relative to this script, so it works from any page
 const AUDIO_BASE = new URL('../assets/sounds/', document.currentScript.src).href;
 
+// All tracks are from Pixabay (Pixabay Content License)
 const SOUNDS = {
-    heal:             'skyrim-healing.mp3',
-    sword_sound:      'sword_sound_effect.mp3',
-    death:            'scream.mp3',
-    fire_ball:        'fireball.mp3',
-    victory_hero:     'victory-hero.mp3',
-    victory_villain:  'victory-villian.mp3',
-    game_theme:       'Dark Souls - CC.mp3',
-    battle_theme:     'battle-dun-dun.mp3',
-    transition_theme: 'transition.mp3',
+    heal:            'healing.mp3',
+    sword_sound:     'sword_sound_effect.mp3',
+    death:           'scream.mp3',
+    fire_ball:       'fireball.mp3',
+    victory_hero:    'victory-hero.mp3',
+    victory_villain: 'victory-villian.mp3',
+    game_theme:      'bg_music.mp3',
+    battle_theme:    'battle-dun-dun.mp3',
 };
 
 const audioCache = {};
@@ -58,8 +58,9 @@ if (typeof GAME_EVENTS !== 'undefined') {
     ['heal', 'sword_sound', 'death', 'fire_ball', 'victory_hero', 'victory_villain', 'battle_theme']
         .forEach(loadSound);
 
-    onHealPerformed(({ healerId }) => {
-        if (healerId === LOCAL_ID) playSound('heal', 0.7);
+    // you healed someone, or someone healed you
+    onHealPerformed(({ healerId, healeeId }) => {
+        if (healerId === LOCAL_ID || healeeId === LOCAL_ID) playSound('heal', 0.7);
     });
 
     onCharacterDefeated(({ characterId }) => {
