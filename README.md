@@ -46,6 +46,14 @@ Menu → Mode Select ─┬─ Fate of Goliath (solo) → Solo Setup ─┬→ B
 
 ---
 
+## The Arena
+A round stone coliseum with a sand floor. Goliath starts on the red spawn platform, heroes on the blue one.
+- **Stone pillars** block movement and stop fireballs.
+- **Low walls** block movement, but fireballs fly over them.
+- The outer wall keeps everyone inside.
+
+---
+
 ## Combat System
 
 ### Base Stats
@@ -143,9 +151,8 @@ Difficulty sets how often bots re-plan, how accurately they aim, how quickly the
 ## Asset credits
 | Asset | Author | License |
 |-------|--------|---------|
-| [Low poly Sword 3D Model](https://sketchfab.com/3d-models/low-poly-sword-3d-model-9cfcd357cd3743f5b893b659ef42a05d) (`assets/models/sword.glb`) | Omkar_suryavanshi | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
-| [Low Poly FireBall](https://sketchfab.com/3d-models/low-poly-fireball-boule-de-feu-en-low-poly-b722efe7ec084dafbe41427714dc5711) (`assets/models/fireball.glb`) | Dzénetan Massart | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
-| Character and arena models | Generated with `tools/` | Project's own |
+| Character, arena, sword and fireball models | Made for this project (character and arena models generated with `tools/`) | Project's own |
+| Music and sound effects (`assets/sounds/`) | [Pixabay](https://pixabay.com) | [Pixabay Content License](https://pixabay.com/service/license-summary/) |
 | Character data (`data.csv`) | Provided by the hackathon | — |
 
 ---
@@ -167,6 +174,8 @@ npm install
 node index.js        # serves the game + lobby on http://localhost:9091 (PORT env to change)
 ```
 Open `http://localhost:9091`. Friends on the same network join with the LAN address the server prints.
+
+Re-optimizing the 3D models after regenerating them: `cd tools && npm install && node optimize-models.mjs ../assets/models`.
 
 ## Project Structure
 ```

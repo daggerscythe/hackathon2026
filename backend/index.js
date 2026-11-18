@@ -68,7 +68,7 @@ function publicGame(game) {
       ready:     p.ready,
       character: p.character,
       spawnX:    p.spawnX ?? 0,
-      spawnY:    p.spawnY ?? 3,
+      spawnY:    p.spawnY ?? 1.2,
       spawnZ:    p.spawnZ ?? 0,
     })),
   };
@@ -146,15 +146,16 @@ wsServer.on('request', request => {
         const villainCount = game.players.filter(p => p.character.role === 'villain').length;
         if (villainCount !== 1) return send(conn, { method: 'error', message: 'Need exactly 1 villain to start.' });
 
-        // spawn positions: villain on one side of the arena, heroes spread on the other
+        // spawn positions: Goliath on the red platform, heroes on the blue one
+        const HERO_SPOTS = [[0, 11], [-1.3, 11.6], [1.3, 11.6]];
         let heroIdx = 0;
         game.players.forEach(p => {
           if (p.character.role === 'villain') {
-            p.spawnX = 0; p.spawnZ = -9;
+            p.spawnX = 0; p.spawnZ = -11;
           } else {
-            p.spawnX = (heroIdx++ - 1) * 4; p.spawnZ = 9;
+            [p.spawnX, p.spawnZ] = HERO_SPOTS[heroIdx++ % HERO_SPOTS.length];
           }
-          p.spawnY = 3;
+          p.spawnY = 1.2;
         });
 
         broadcast(game, { method: 'start', game: publicGame(game) });

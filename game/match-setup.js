@@ -11,9 +11,10 @@
 // so every client starts with the same roster.
 // ============================================
 
-// villain on one side of the arena, heroes spread along the other
-const VILLAIN_SPAWN = { x: 0, y: 3, z: -9 };
-const HERO_SPAWNS   = [{ x: 0, y: 3, z: 9 }, { x: -4, y: 3, z: 9 }, { x: 4, y: 3, z: 9 }];
+// Goliath on the red spawn platform, heroes on the blue one
+const SPAWN_Y       = 1.2;
+const VILLAIN_SPAWN = { x: 0, y: SPAWN_Y, z: -11 };
+const HERO_SPAWNS   = [{ x: 0, y: SPAWN_Y, z: 11 }, { x: -1.3, y: SPAWN_Y, z: 11.6 }, { x: 1.3, y: SPAWN_Y, z: 11.6 }];
 
 const CLASS_MODEL = {
   villain_mage: 'model-villain-mage',
@@ -45,7 +46,7 @@ function createCharacterEntity(entityId, characterId, cls, label, pos) {
   const entity = document.createElement('a-entity');
   entity.setAttribute('id', entityId);
   entity.dataset.characterId = characterId;
-  entity.setAttribute('position', `${pos.x} ${GROUND_Y} ${pos.z}`);
+  entity.setAttribute('position', `${pos.x} ${ArenaLayout.groundHeightAt(pos.x, pos.z) - BODY_OFFSET} ${pos.z}`);
   entity.setAttribute('health-bar', `nickname: ${label}; health: 100; maxHealth: 100`);
 
   const model = document.createElement('a-gltf-model');
@@ -55,14 +56,15 @@ function createCharacterEntity(entityId, characterId, cls, label, pos) {
   model.setAttribute('position', `0 ${MODEL_OFFSET} 0`);
   entity.appendChild(model);
 
-  // the sword is a child of the model so it turns with the body
+  // the sword is a child of the model so it turns with the body (model faces +Z)
   if (!MAGIC_CLASSES.includes(cls) && cls !== 'support') {
-    const weapon = document.createElement('a-gltf-model');
+    const weapon = document.createElement('a-entity');
     weapon.classList.add('char-weapon');
-    weapon.setAttribute('src', '#sword');
-    weapon.setAttribute('scale', '0.1 0.1 0.1');
-    weapon.setAttribute('position', '-0.55 1.5 0.6');
-    weapon.setAttribute('rotation', '0 180 -45');
+    weapon.setAttribute('gltf-model', '#sword');
+    weapon.setAttribute('scale', '1.4 1.4 1.4');
+    weapon.setAttribute('position', '-0.65 1.4 0.35');
+    weapon.setAttribute('rotation', '40 0 0');
+    weapon.setAttribute('weapon-swing', `characterId: ${characterId}; amount: 70`);
     model.appendChild(weapon);
   }
 
@@ -103,7 +105,7 @@ function startMultiplayerMatch() {
   const lobbyPlayers = JSON.parse(sessionStorage.getItem('lobbyPlayers') || '[]');
 
   lobbyPlayers.forEach(p => {
-    const spawn = { x: p.spawnX ?? 0, y: p.spawnY ?? 3, z: p.spawnZ ?? 0 };
+    const spawn = { x: p.spawnX ?? 0, y: p.spawnY ?? SPAWN_Y, z: p.spawnZ ?? 0 };
     const cls   = p.character?.cls  || 'tank';
     const role  = p.character?.role || 'hero';
 
@@ -115,7 +117,7 @@ function startMultiplayerMatch() {
     const entityId = `remote-${p.clientId}`;
     createCharacterEntity(entityId, p.clientId, cls, p.username || 'Player', spawn);
     addCharacter(p.clientId, role, cls, toStats(p.character, p.username), entityId);
-    remoteTargets[entityId] = { position: { ...spawn, y: GROUND_Y }, rotation: { y: 0 } };
+    remoteTargets[entityId] = { position: { ...spawn, y: ArenaLayout.groundHeightAt(spawn.x, spawn.z) - BODY_OFFSET }, rotation: { y: 0 } };
   });
 
   connectToGame();
@@ -142,7 +144,7 @@ async function startSoloMatch() {
   if (!config?.player) config = await defaultSoloConfig();
 
   const heroSpawns = [...HERO_SPAWNS];
-  const spawnFor   = c => (c.role === 'villain' ? VILLAIN_SPAWN : heroSpawns.shift() || { x: 0, y: 3, z: 6 });
+  const spawnFor   = c => (c.role === 'villain' ? VILLAIN_SPAWN : heroSpawns.shift() || { x: 0, y: SPAWN_Y, z: 9 });
 
   setupLocalPlayer(config.player, spawnFor(config.player));
 

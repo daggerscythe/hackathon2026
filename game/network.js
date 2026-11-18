@@ -84,6 +84,9 @@ const MESSAGE_HANDLERS = {
     if (msg.ability === 'magic' && msg.direction) {
       emit(GAME_EVENTS.MAGIC_FIRED, { attackerId: msg.clientId, direction: msg.direction });
     }
+    if (msg.ability === 'melee') {
+      emit(GAME_EVENTS.MELEE_SWING, { attackerId: msg.clientId });
+    }
   },
 
   matchOver(msg) {

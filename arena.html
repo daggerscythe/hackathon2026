@@ -14,6 +14,7 @@
   <script src="game/physics.js"></script>
   <script src="game/transport.js"></script>
   <script src="game/network.js"></script>
+  <script src="game/arena.js"></script>
   <script src="game/roster.js"></script>
   <script src="game/bot-ai.js"></script>
   <script src="game/match-setup.js"></script>
@@ -66,6 +67,7 @@
     physics="gravity: -9.8"
     game-manager
     network-lerp
+    arena-colliders
   >
 
     <a-assets timeout="10000">
@@ -80,22 +82,15 @@
       <a-asset-item id="model-dps"          src="assets/models/dps.glb"></a-asset-item>
       <a-asset-item id="model-tank"         src="assets/models/tank.glb"></a-asset-item>
       <a-asset-item id="sword"              src="assets/models/sword.glb"></a-asset-item>
+      <a-asset-item id="fireball"           src="assets/models/fireball.glb"></a-asset-item>
       <a-asset-item id="arena"              src="assets/models/arena.glb"></a-asset-item>
     </a-assets>
 
     <a-sky src="#sky_night"></a-sky>
 
-    <!-- Stage -->
+    <!-- Stage: sand floor at y = 0. Colliders come from game/arena.js -->
     <a-entity id="stage">
-      <a-gltf-model src="#arena" position="0 -0.3 0" scale="1"></a-gltf-model>
-      <!-- invisible collision floor; its top matches the arena floor (y = 2.75) -->
-      <a-box
-        id="platform"
-        position="0 2.65 0"
-        width="30" height="0.2" depth="30"
-        visible="false"
-        static-body="shape: box"
-      ></a-box>
+      <a-gltf-model src="#arena" position="0 -0.25 0"></a-gltf-model>
     </a-entity>
 
     <!-- Lighting -->
@@ -105,14 +100,15 @@
     <!-- Local player — first-person, physics-driven. Configured by match-setup.js -->
     <a-entity
       id="local-player"
-      position="0 3 0"
-      dynamic-body="mass: 5; linearDamping: 0.99; angularDamping: 1.0"
+      position="0 1.2 0"
+      dynamic-body="shape: none; mass: 5; linearDamping: 0.99; angularDamping: 1.0"
+      shape__body="shape: box; halfExtents: 0.35 0.85 0.35; offset: 0 0.85 0"
       player-physics
       attack-input
     >
       <a-camera
         id="main-camera"
-        position="0 2 -0.2"
+        position="0 1.7 0"
         look-controls="pointerLockEnabled: true"
         wasd-controls="enabled: false"
       ></a-camera>

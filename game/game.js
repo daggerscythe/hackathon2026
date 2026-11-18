@@ -16,11 +16,14 @@ const LOCAL_ENTITY = 'local-player';
 
 // Arena geometry. Every character entity uses the same origin convention as
 // the local player's physics body, so distances compare like-for-like.
-const ARENA_FLOOR_Y = 2.75;  // top of the arena floor
-const GROUND_Y      = 2.32;  // entity origin of a character standing on the floor
-const MODEL_OFFSET  = ARENA_FLOOR_Y - GROUND_Y; // lift models so their feet touch the floor
-const CHEST_HEIGHT  = 1.8;   // above the origin: projectile spawn / hit centre
-const ARENA_RADIUS  = 13;    // walkable radius used by bots
+const ARENA_FLOOR_Y = 0;     // the coliseum's sand floor
+// Every character's entity origin is at its feet (the local player's physics
+// box is defined that way in arena.html), so a character standing on the floor
+// has y = ARENA_FLOOR_Y and models need no vertical offset.
+const BODY_OFFSET   = 0;
+const GROUND_Y      = ARENA_FLOOR_Y - BODY_OFFSET;
+const MODEL_OFFSET  = BODY_OFFSET;
+const CHEST_HEIGHT  = 1.4;   // above the feet: projectile spawn / hit centre
 
 // =================================================
 // Event Bus - communicating with other files
@@ -456,6 +459,7 @@ function isSimulatedLocally(char) {
 const PROJECTILE_SPEED      = 10;  // units per second
 const PROJECTILE_RANGE      = 20;  // max distance before despawn
 const PROJECTILE_HIT_RADIUS = 1.5;
+const PROJECTILE_SPIN       = 9;   // radians per second around the flight axis
 const _tmpVec               = new THREE.Vector3();
 
 AFRAME.registerComponent('projectile', {
@@ -469,16 +473,27 @@ AFRAME.registerComponent('projectile', {
   init() {
     this.distanceTravelled = 0;
     this.direction = new THREE.Vector3(this.data.dirX, this.data.dirY, this.data.dirZ).normalize();
+
+    // point the fireball model's head (+Z) along its flight path
+    const obj = this.el.object3D;
+    obj.lookAt(_tmpVec.copy(obj.position).add(this.direction));
   },
 
   tick(time, delta) {
     if (getState() !== STATES.BATTLE) { this.despawn(); return; }
 
+    const obj     = this.el.object3D;
     const moveAmt = PROJECTILE_SPEED * (delta / 1000);
-    this.el.object3D.position.addScaledVector(this.direction, moveAmt);
+    obj.position.addScaledVector(this.direction, moveAmt);
+    obj.rotateZ(PROJECTILE_SPIN * (delta / 1000));
     this.distanceTravelled += moveAmt;
 
     if (this.distanceTravelled >= PROJECTILE_RANGE) { this.despawn(); return; }
+
+    // cover, walls and the floor stop fireballs
+    const p = obj.position;
+    if (typeof ArenaLayout !== 'undefined' && ArenaLayout.blocksPoint(p.x, p.y, p.z)) { this.despawn(); return; }
+
     this.checkCollision();
   },
 
@@ -515,6 +530,40 @@ AFRAME.registerComponent('projectile', {
   },
 });
 
+// ============================================
+// WEAPON SWING — quick chop animation whenever the owner swings
+//   weapon-swing="characterId: bot-1; amount: 70"   (degrees around X)
+// ============================================
+AFRAME.registerComponent('weapon-swing', {
+  schema: {
+    characterId: { type: 'string' },
+    amount:      { type: 'number', default: 70 },
+    duration:    { type: 'number', default: 220 },
+  },
+
+  init() {
+    this.elapsed = -1;
+    this.onSwing = (e) => {
+      if (e.detail.attackerId !== this.data.characterId) return;
+      if (this.elapsed < 0) this.baseX = this.el.object3D.rotation.x;
+      this.elapsed = 0;
+    };
+    document.addEventListener(GAME_EVENTS.MELEE_SWING, this.onSwing);
+  },
+
+  tick(time, delta) {
+    if (this.elapsed < 0) return;
+    this.elapsed += delta;
+    const t = Math.min(1, this.elapsed / this.data.duration);
+    this.el.object3D.rotation.x = this.baseX + THREE.MathUtils.degToRad(this.data.amount) * Math.sin(Math.PI * t);
+    if (t >= 1) { this.el.object3D.rotation.x = this.baseX; this.elapsed = -1; }
+  },
+
+  remove() {
+    document.removeEventListener(GAME_EVENTS.MELEE_SWING, this.onSwing);
+  },
+});
+
 // Attach to the a-scene: <a-scene game-manager>
 AFRAME.registerComponent('game-manager', {
   init() {
@@ -531,12 +580,13 @@ AFRAME.registerComponent('game-manager', {
     const attackerEl = attacker && document.getElementById(attacker.entityId);
     if (!attackerEl) return;
 
+    // start just in front of the caster so it doesn't appear inside their head
     const pos = attackerEl.object3D.position;
-    const projectile = document.createElement('a-sphere');
-    projectile.setAttribute('radius', '0.2');
-    projectile.setAttribute('color', '#f39c12');
-    projectile.setAttribute('material', 'emissive: #ff6a00; emissiveIntensity: 0.8');
-    projectile.setAttribute('position', `${pos.x} ${pos.y + CHEST_HEIGHT} ${pos.z}`);
+    const projectile = document.createElement('a-entity');
+    projectile.setAttribute('gltf-model', '#fireball');
+    projectile.setAttribute('scale', '1.2 1.2 1.2');
+    projectile.setAttribute('position',
+      `${pos.x + direction.x * 0.8} ${pos.y + CHEST_HEIGHT + direction.y * 0.8} ${pos.z + direction.z * 0.8}`);
     projectile.setAttribute('projectile',
       `attackerId: ${attackerId}; dirX: ${direction.x}; dirY: ${direction.y}; dirZ: ${direction.z}`);
     projectile.classList.add('projectile-entity');

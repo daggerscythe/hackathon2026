@@ -91,13 +91,6 @@ AFRAME.registerComponent('player-physics', {
 
     // stay upright
     body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
-
-    // point the sword where the camera looks
-    const weaponEl = document.getElementById('local-weapon');
-    if (weaponEl) {
-      weaponEl.object3D.rotation.y = yaw;
-      weaponEl.object3D.rotation.x = angles.x;
-    }
   },
 
   remove() {
@@ -140,22 +133,27 @@ AFRAME.registerComponent('attack-input', {
     window.addEventListener('contextmenu', this.onContextMenu);
   },
 
+  /** First-person sword in the lower right of the view (melee classes only). */
   spawnPermanentWeapon() {
     if (MAGIC_CLASSES.includes(this.data.attackClass) || this.data.attackClass === 'support') return;
     if (document.getElementById('local-weapon')) return;
 
-    const weapon = document.createElement('a-gltf-model');
-    weapon.setAttribute('id',       'local-weapon');
-    weapon.setAttribute('src',      '#sword');
-    weapon.setAttribute('scale',    '0.08 0.08 0.08');
-    weapon.setAttribute('position', '0 0.2 0.5');
-    weapon.setAttribute('rotation', '0 0 -45');
-    this.el.appendChild(weapon);
+    const weapon = document.createElement('a-entity');
+    weapon.setAttribute('id',           'local-weapon');
+    weapon.setAttribute('gltf-model',   '#sword');
+    weapon.setAttribute('scale',        '0.4 0.4 0.4');
+    weapon.setAttribute('position',     '0.36 -0.4 -0.65');
+    weapon.setAttribute('rotation',     '-30 0 12');
+    weapon.setAttribute('weapon-swing', `characterId: ${LOCAL_ID}; amount: -75`);
+    document.getElementById('main-camera').appendChild(weapon);
   },
 
   doMelee() {
+    const me = getLocalCharacter();
+    if (!me || !me.isAlive || isOnCooldown(LOCAL_ID, 'melee')) return;
     const angles = getCameraAngles();
     const hits = performMeleeSwing(LOCAL_ID, angles ? angles.y : undefined);
+    if (typeof sendAbilityCast === 'function') sendAbilityCast('melee');
     if (typeof sendAttackEvent === 'function') {
       hits.forEach(h => sendAttackEvent('melee', h.targetId, h.damage));
     }
