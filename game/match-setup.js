@@ -1,12 +1,19 @@
 // ============================================
 // MATCH SETUP — builds the arena roster and starts the match
-// Depends on game.js, physics.js, network.js
+// Depends on game.js, physics.js, network.js, roster.js, bot-ai.js
 //
-// Reads what the lobby wrote to sessionStorage:
+// Multiplayer reads what the lobby wrote to sessionStorage:
 //   lobbyPlayers — [{ clientId, username, character: {name, cls, role, str, mag, def, spd, pow}, spawnX/Y/Z }]
+// Solo reads what solo-setup.html wrote:
+//   soloConfig   — { difficulty, player: character, bots: [character, …] }
+//
 // Every character is registered up front, then initMatch() runs once,
 // so every client starts with the same roster.
 // ============================================
+
+// villain on one side of the arena, heroes spread along the other
+const VILLAIN_SPAWN = { x: 0, y: 3, z: -9 };
+const HERO_SPAWNS   = [{ x: 0, y: 3, z: 9 }, { x: -4, y: 3, z: 9 }, { x: 4, y: 3, z: 9 }];
 
 const CLASS_MODEL = {
   villain_mage: 'model-villain-mage',
@@ -38,23 +45,25 @@ function createCharacterEntity(entityId, characterId, cls, label, pos) {
   const entity = document.createElement('a-entity');
   entity.setAttribute('id', entityId);
   entity.dataset.characterId = characterId;
-  entity.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+  entity.setAttribute('position', `${pos.x} ${GROUND_Y} ${pos.z}`);
   entity.setAttribute('health-bar', `nickname: ${label}; health: 100; maxHealth: 100`);
 
   const model = document.createElement('a-gltf-model');
   model.classList.add('char-model');
   model.setAttribute('src', `#${CLASS_MODEL[cls] || 'model-tank'}`);
   model.setAttribute('scale', '0.8 0.8 0.8');
+  model.setAttribute('position', `0 ${MODEL_OFFSET} 0`);
   entity.appendChild(model);
 
+  // the sword is a child of the model so it turns with the body
   if (!MAGIC_CLASSES.includes(cls) && cls !== 'support') {
     const weapon = document.createElement('a-gltf-model');
     weapon.classList.add('char-weapon');
     weapon.setAttribute('src', '#sword');
-    weapon.setAttribute('scale', '0.08 0.08 0.08');
-    weapon.setAttribute('position', '-0.2 0.2 -0.75');
-    weapon.setAttribute('rotation', '0 0 -45');
-    entity.appendChild(weapon);
+    weapon.setAttribute('scale', '0.1 0.1 0.1');
+    weapon.setAttribute('position', '-0.55 1.5 0.6');
+    weapon.setAttribute('rotation', '0 180 -45');
+    model.appendChild(weapon);
   }
 
   document.querySelector('a-scene').appendChild(entity);
@@ -106,10 +115,48 @@ function startMultiplayerMatch() {
     const entityId = `remote-${p.clientId}`;
     createCharacterEntity(entityId, p.clientId, cls, p.username || 'Player', spawn);
     addCharacter(p.clientId, role, cls, toStats(p.character, p.username), entityId);
-    remoteTargets[entityId] = { position: spawn, rotation: { y: 0 } };
+    remoteTargets[entityId] = { position: { ...spawn, y: GROUND_Y }, rotation: { y: 0 } };
   });
 
   connectToGame();
+  beginMatch();
+}
+
+/** Arena opened directly (no setup screen): random hero + 2 allies vs a villain bot. */
+async function defaultSoloConfig() {
+  await Roster.load();
+  const pick = (side, classes) => {
+    const cls = classes[Math.floor(Math.random() * classes.length)];
+    return Roster.toGameCharacter(Roster.random(side, cls), side);
+  };
+  return {
+    difficulty: 'normal',
+    player: pick('Hero', Roster.HERO_CLASSES),
+    bots:   [pick('Villain', Roster.VILLAIN_CLASSES), pick('Hero', Roster.HERO_CLASSES), pick('Hero', Roster.HERO_CLASSES)],
+  };
+}
+
+async function startSoloMatch() {
+  let config = null;
+  try { config = JSON.parse(sessionStorage.getItem('soloConfig') || 'null'); } catch {}
+  if (!config?.player) config = await defaultSoloConfig();
+
+  const heroSpawns = [...HERO_SPAWNS];
+  const spawnFor   = c => (c.role === 'villain' ? VILLAIN_SPAWN : heroSpawns.shift() || { x: 0, y: 3, z: 6 });
+
+  setupLocalPlayer(config.player, spawnFor(config.player));
+
+  config.bots.forEach((character, i) => {
+    const id    = `bot-${i + 1}`;
+    const spawn = spawnFor(character);
+    const label = character.role === 'villain' ? `${character.name} (Goliath)` : character.name;
+
+    const entity = createCharacterEntity(id, id, character.cls, label, spawn);
+    const bot    = addCharacter(id, character.role, character.cls, toStats(character), id);
+    bot.isBot    = true;
+    entity.setAttribute('bot-brain', `characterId: ${id}; difficulty: ${config.difficulty || 'normal'}`);
+  });
+
   beginMatch();
 }
 
@@ -122,7 +169,8 @@ function beginMatch() {
 }
 
 function setupMatch() {
-  startMultiplayerMatch();
+  if (Net.isMultiplayer) startMultiplayerMatch();
+  else startSoloMatch();
 }
 
 document.addEventListener('DOMContentLoaded', () => {

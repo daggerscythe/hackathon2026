@@ -114,10 +114,13 @@ AFRAME.registerComponent('network-lerp', {
       pos.y = THREE.MathUtils.lerp(pos.y, target.position.y, t);
       pos.z = THREE.MathUtils.lerp(pos.z, target.position.z, t);
 
-      const model  = el._model  || (el._model  = el.querySelector('.char-model'));
-      const weapon = el._weapon || (el._weapon = el.querySelector('.char-weapon'));
-      if (model)  model.object3D.rotation.y  = THREE.MathUtils.lerp(model.object3D.rotation.y,  target.rotation.y + Math.PI, t);
-      if (weapon) weapon.object3D.rotation.y = THREE.MathUtils.lerp(weapon.object3D.rotation.y, target.rotation.y, t);
+      // turn the model (and the sword it holds) toward the reported camera yaw
+      const model = el._model || (el._model = el.querySelector('.char-model'));
+      if (model) {
+        const rot  = model.object3D.rotation;
+        const want = target.rotation.y + Math.PI;
+        rot.y += Math.atan2(Math.sin(want - rot.y), Math.cos(want - rot.y)) * t;
+      }
     }
   },
 });

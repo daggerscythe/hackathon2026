@@ -14,6 +14,8 @@
   <script src="game/physics.js"></script>
   <script src="game/transport.js"></script>
   <script src="game/network.js"></script>
+  <script src="game/roster.js"></script>
+  <script src="game/bot-ai.js"></script>
   <script src="game/match-setup.js"></script>
   <script src="game/spectator.js"></script>
   <script src="game/audio.js"></script>
@@ -86,10 +88,10 @@
     <!-- Stage -->
     <a-entity id="stage">
       <a-gltf-model src="#arena" position="0 -0.3 0" scale="1"></a-gltf-model>
-      <!-- invisible collision floor matching the arena surface -->
+      <!-- invisible collision floor; its top matches the arena floor (y = 2.75) -->
       <a-box
         id="platform"
-        position="0 2.3 0"
+        position="0 2.65 0"
         width="30" height="0.2" depth="30"
         visible="false"
         static-body="shape: box"

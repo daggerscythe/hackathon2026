@@ -65,7 +65,7 @@ AFRAME.registerComponent('health-bar', {
     if (!camera || !renderer) return;
 
     this.el.object3D.getWorldPosition(_hbWorldPos);
-    _hbWorldPos.y += 2.4; // float above head
+    _hbWorldPos.y += MODEL_OFFSET + 3.1; // just above the model's head
     _hbWorldPos.project(camera);
 
     if (_hbWorldPos.z > 1) { // behind the camera

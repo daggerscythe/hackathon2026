@@ -14,6 +14,14 @@
 const LOCAL_ID     = sessionStorage.getItem('clientId') || 'local';
 const LOCAL_ENTITY = 'local-player';
 
+// Arena geometry. Every character entity uses the same origin convention as
+// the local player's physics body, so distances compare like-for-like.
+const ARENA_FLOOR_Y = 2.75;  // top of the arena floor
+const GROUND_Y      = 2.32;  // entity origin of a character standing on the floor
+const MODEL_OFFSET  = ARENA_FLOOR_Y - GROUND_Y; // lift models so their feet touch the floor
+const CHEST_HEIGHT  = 1.8;   // above the origin: projectile spawn / hit centre
+const ARENA_RADIUS  = 13;    // walkable radius used by bots
+
 // =================================================
 // Event Bus - communicating with other files
 // =================================================
@@ -447,7 +455,7 @@ AFRAME.registerComponent('projectile', {
 
       // compare against the body centre (projectiles fly at chest height)
       _tmpVec.copy(targetEl.object3D.position);
-      _tmpVec.y += 1;
+      _tmpVec.y += CHEST_HEIGHT;
       const dist = this.el.object3D.position.distanceTo(_tmpVec);
       if (dist < PROJECTILE_HIT_RADIUS) {
         const damage = applyHit(this.data.attackerId, char.id, 'magic');
@@ -486,7 +494,7 @@ AFRAME.registerComponent('game-manager', {
     projectile.setAttribute('radius', '0.2');
     projectile.setAttribute('color', '#f39c12');
     projectile.setAttribute('material', 'emissive: #ff6a00; emissiveIntensity: 0.8');
-    projectile.setAttribute('position', `${pos.x} ${pos.y + 1} ${pos.z}`);
+    projectile.setAttribute('position', `${pos.x} ${pos.y + CHEST_HEIGHT} ${pos.z}`);
     projectile.setAttribute('projectile',
       `attackerId: ${attackerId}; dirX: ${direction.x}; dirY: ${direction.y}; dirZ: ${direction.z}`);
     projectile.classList.add('projectile-entity');
