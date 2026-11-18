@@ -1,0 +1,11 @@
+{
+  "name": "slaying-goliath-tools",
+  "private": true,
+  "description": "Asset pipeline helpers. Run: npm install && node optimize-models.mjs ../assets/models",
+  "type": "module",
+  "devDependencies": {
+    "@gltf-transform/core": "^4.0.0",
+    "@gltf-transform/extensions": "^4.0.0",
+    "@gltf-transform/functions": "^4.0.0"
+  }
+}
