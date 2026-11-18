@@ -271,8 +271,8 @@
     @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
   </style>
 
-    <script src="audio.js"></script>
-    <script src="consistent_audio.js"></script>
+    <script src="../game/audio.js"></script>
+    <script src="../game/consistent_audio.js"></script>
 </head>
 <body>
 
@@ -725,16 +725,27 @@
     // ══════════════════════════════════════════════════════════════════════
     // WEBSOCKET
     // ══════════════════════════════════════════════════════════════════════
-    function connectWS(ip, onReady) {
+    // "host", "host:port", "ws(s)://…" or "http(s)://…" → a WebSocket URL
+    const DEFAULT_PORT = 9091;
+    function toServerUrl(addr) {
+      addr = (addr || '').trim() || location.host || `localhost:${DEFAULT_PORT}`;
+      if (/^wss?:\/\//i.test(addr))   return addr;
+      if (/^https?:\/\//i.test(addr)) return addr.replace(/^http/i, 'ws');
+      const secure = location.protocol === 'https:';
+      const hasPort = /:\d+$/.test(addr);
+      return `${secure ? 'wss' : 'ws'}://${addr}${hasPort || secure ? '' : ':' + DEFAULT_PORT}`;
+    }
+
+    function connectWS(addr, onReady) {
       if (ws) { ws.close(); ws = null; }
-      serverIP = ip || 'localhost';
+      serverIP = toServerUrl(addr);
       setStatus('Connecting…', '');
-      ws = new WebSocket(`ws://${serverIP}:9090`);
+      ws = new WebSocket(serverIP);
 
       ws.onopen  = () => setStatus('Connected', 'connected');
       ws.onerror = () => {
         setStatus('Connection failed', 'error');
-        showError('join-error', `Cannot reach ${serverIP}:9090`);
+        showError('join-error', `Cannot reach ${serverIP}`);
       };
       ws.onclose = () => setStatus('Disconnected', 'error');
       ws.onmessage = e => handleMessage(JSON.parse(e.data), onReady);
@@ -783,21 +794,13 @@
 
         case 'start':
           // ── SYNC GATE: server says go, everyone navigates together ──
-          sessionStorage.setItem('clientId',           clientId);
-          sessionStorage.setItem('gameId',             currentGameId);
-          sessionStorage.setItem('lobbyWsHost',        serverIP);
-          sessionStorage.setItem('lobbyPlayers',       JSON.stringify(msg.game.players));
-          sessionStorage.setItem('selectedCharacter',  myCharacter?.name  || '');
-          sessionStorage.setItem('selectedClass',      (() => {
-            const MAP = {
-              'Tank':'tank','DPS':'dps','Support':'support','Mage':'mage',
-              'Brute':'brute','Destroyer':'agile','Schemer':'villain_mage','Sorcerer':'villain_mage',
-            };
-            return MAP[myClass] || (myClass || '').toLowerCase();
-          })());
-          sessionStorage.setItem('selectedRole',       mySide?.toLowerCase() || 'hero');
-          sessionStorage.setItem('characterSide',      mySide || 'Hero');
-          window.location.href = '../index.html';
+          sessionStorage.setItem('gameMode',      'multiplayer');
+          sessionStorage.setItem('clientId',      clientId);
+          sessionStorage.setItem('gameId',        currentGameId);
+          sessionStorage.setItem('serverUrl',     serverIP);
+          sessionStorage.setItem('lobbyUsername', username);
+          sessionStorage.setItem('lobbyPlayers',  JSON.stringify(msg.game.players));
+          window.location.href = '../arena.html';
           break;
 
         case 'error':
@@ -876,14 +879,14 @@
       isHost = true; mySide = null; myCharacter = null; myReady = false;
       clearErrors(); buildEmptySlots(); showScreen('screen-lobby');
       setStatus('Connecting…', '');
-      connectWS(location.hostname, () => {
+      connectWS(location.host, () => {
         sendWS({ method: 'create', clientId, username });
         document.getElementById('start-btn').style.display = 'inline';
       });
     }
 
     function joinGame() {
-      const ip   = document.getElementById('server-ip-input').value.trim() || window.location.hostname || 'localhost';
+      const ip   = document.getElementById('server-ip-input').value.trim() || location.host;
       const code = document.getElementById('room-code-input').value.trim().toUpperCase();
       clearErrors();
       if (!code || code.length !== 4) { showError('join-error', 'Enter the 4-letter room code.'); return; }
@@ -933,16 +936,12 @@
     function goBack() { window.location.href = 'mode-select.html'; }
 
     // ══════════════════════════════════════════════════════════════════════
-    // AUTO-FILL SERVER ADDRESS from current page hostname
-    // Falls back to 'localhost' when served from file:// or 127.0.0.1
+    // AUTO-FILL SERVER ADDRESS from the page's own host (the game server
+    // serves this page), falling back to localhost for file:// pages
     // ══════════════════════════════════════════════════════════════════════
     (function seedServerAddress() {
-      const hostname = window.location.hostname;
-      // Use the real hostname unless it's empty (file://) or a loopback address
-      const isLoopback = !hostname || hostname === '127.0.0.1' || hostname === '::1';
-      const defaultAddr = isLoopback ? 'localhost' : hostname;
       const input = document.getElementById('server-ip-input');
-      if (input) input.value = defaultAddr;
+      if (input) input.value = location.host || `localhost:${DEFAULT_PORT}`;
     })();
 
     // ══════════════════════════════════════════════════════════════════════

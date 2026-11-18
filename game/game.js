@@ -1,138 +1,89 @@
 // =================================================
+// Slaying Goliath — core game logic
+//
+// Character registry, combat math, match state machine, and the
+// A-Frame components that render projectiles / hit feedback.
+//
+// Character ids:
+//   LOCAL_ID              — the player on this machine (entity #local-player)
+//   <clientId>            — a remote multiplayer player (entity #remote-<clientId>)
+//   bot-<n>               — an AI bot in solo mode (entity #bot-<n>)
+// =================================================
+
+
+const LOCAL_ID     = sessionStorage.getItem('clientId') || 'local';
+const LOCAL_ENTITY = 'local-player';
+
+// =================================================
 // Event Bus - communicating with other files
 // =================================================
 const GAME_EVENTS = {
-    // State
     STATE_CHANGE:        'game:stateChange',
-
-    // Match
     MATCH_STARTED:       'game:matchStarted',
     MATCH_OVER:          'game:matchOver',
-
-    // Characters
     CHARACTER_DEFEATED:  'game:characterDefeated',
     HEALTH_CHANGED:      'game:healthChanged',
     EXP_AWARDED:         'game:expAwarded',
-
-    // Combat
+    MELEE_SWING:         'game:meleeSwing',
     MELEE_FIRED:         'game:meleeFired',
     MAGIC_FIRED:         'game:magicFired',
     HEAL_PERFORMED:      'game:healPerformed',
 };
 
-// Emitters
 function emit(eventName, detail = {}) {
     document.dispatchEvent(new CustomEvent(eventName, { detail }));
 }
 
-// Listeners
-/**
- * fires when game changes state
- * @param {function} callback - ({previous, current}) => void 
- */
-function onStateChange(callback) {
-  document.addEventListener(GAME_EVENTS.STATE_CHANGE, e => callback(e.detail));
+function on(eventName, callback) {
+    document.addEventListener(eventName, e => callback(e.detail));
 }
 
-/**
- * Fires when a match begins.
- * @param {function} callback - ({ villainId, heroIds }) => void
- */
-function onMatchStarted(callback) {
-  document.addEventListener(GAME_EVENTS.MATCH_STARTED, e => callback(e.detail));
-}
-
-/**
- * Fires when a match ends.
- * @param {function} callback - ({ winner, villainId, heroIds, duration }) => void
- */
-function onMatchOver(callback) {
-  document.addEventListener(GAME_EVENTS.MATCH_OVER, e => callback(e.detail));
-}
-
-/**
- * Fires when any character reaches 0 HP.
- * @param {function} callback - ({ characterId, role }) => void
- */
-function onCharacterDefeated(callback) {
-  document.addEventListener(GAME_EVENTS.CHARACTER_DEFEATED, e => callback(e.detail));
-}
-
-/**
- * Fires when any character's health changes (damage or healing).
- * Earnest uses this to update health bars.
- * @param {function} callback - ({ characterId, health, maxHealth }) => void
- */
-function onHealthChanged(callback) {
-  document.addEventListener(GAME_EVENTS.HEALTH_CHANGED, e => callback(e.detail));
-}
-
-/**
- * Fires when exp is awarded at match end.
- * @param {function} callback - ({ characterId, amount, total }) => void
- */
-function onExpAwarded(callback) {
-  document.addEventListener(GAME_EVENTS.EXP_AWARDED, e => callback(e.detail));
-}
-
-/**
- * Fires when a melee hit lands.
- * A-Frame hooks uses this to trigger hit animations.
- * @param {function} callback - ({ attackerId, defenderId }) => void
- */
-function onMeleeFired(callback) {
-  document.addEventListener(GAME_EVENTS.MELEE_FIRED, e => callback(e.detail));
-}
-
-/**
- * Fires when a magic projectile is launched.
- * A-Frame hooks uses this to spawn the projectile entity.
- * @param {function} callback - ({ attackerId, direction }) => void
- */
-function onMagicFired(callback) {
-  document.addEventListener(GAME_EVENTS.MAGIC_FIRED, e => callback(e.detail));
-}
-
-/**
- * Fires when a heal is performed.
- * @param {function} callback - ({ healerId, healeeId }) => void
- */
-function onHealPerformed(callback) {
-  document.addEventListener(GAME_EVENTS.HEAL_PERFORMED, e => callback(e.detail));
-}
+/** ({previous, current}) */
+const onStateChange       = cb => on(GAME_EVENTS.STATE_CHANGE, cb);
+/** ({ villainId, heroIds }) */
+const onMatchStarted      = cb => on(GAME_EVENTS.MATCH_STARTED, cb);
+/** ({ winner, villainId, heroIds, duration, remote }) */
+const onMatchOver         = cb => on(GAME_EVENTS.MATCH_OVER, cb);
+/** ({ characterId, role, killerId }) */
+const onCharacterDefeated = cb => on(GAME_EVENTS.CHARACTER_DEFEATED, cb);
+/** ({ characterId, health, maxHealth, sourceId, isDamage }) */
+const onHealthChanged     = cb => on(GAME_EVENTS.HEALTH_CHANGED, cb);
+/** ({ characterId, amount, total }) */
+const onExpAwarded        = cb => on(GAME_EVENTS.EXP_AWARDED, cb);
+/** ({ attackerId }) — fires on every swing, hit or miss */
+const onMeleeSwing        = cb => on(GAME_EVENTS.MELEE_SWING, cb);
+/** ({ attackerId, defenderId, damage }) — fires per target hit */
+const onMeleeFired        = cb => on(GAME_EVENTS.MELEE_FIRED, cb);
+/** ({ attackerId, direction }) */
+const onMagicFired        = cb => on(GAME_EVENTS.MAGIC_FIRED, cb);
+/** ({ healerId, healeeId, amount }) */
+const onHealPerformed     = cb => on(GAME_EVENTS.HEAL_PERFORMED, cb);
 
 // =====================================
 // Game State Machine
 // =====================================
 const STATES = {
     CHARACTER_SELECT: 'CHARACTER_SELECT',
-    BATTLE: 'BATTLE',
-    GAME_OVER: 'GAME_OVER',
+    BATTLE:           'BATTLE',
+    GAME_OVER:        'GAME_OVER',
 };
 
 const VALID_TRANSITIONS = {
     [STATES.CHARACTER_SELECT]: [STATES.BATTLE],
-    [STATES.BATTLE]: [STATES.GAME_OVER],
-    [STATES.GAME_OVER]: [STATES.CHARACTER_SELECT],
+    [STATES.BATTLE]:           [STATES.GAME_OVER],
+    [STATES.GAME_OVER]:        [STATES.CHARACTER_SELECT],
 };
 
 let currentState = STATES.CHARACTER_SELECT;
 
 function transitionTo(newState) {
-    const allowed = VALID_TRANSITIONS[currentState];
-
-    if (!allowed.includes(newState)) {
+    if (!VALID_TRANSITIONS[currentState].includes(newState)) {
         console.warn(`Invalid transition: ${currentState} --> ${newState}`);
         return false;
     }
-
-    console.log(`State: ${currentState} --> ${newState}`);
-
-    // let other files know of state change
-    const previousState = currentState;
+    const previous = currentState;
     currentState = newState;
-    emit(GAME_EVENTS.STATE_CHANGE, { previous: previousState, current: newState });
-
+    emit(GAME_EVENTS.STATE_CHANGE, { previous, current: newState });
     return true;
 }
 
@@ -141,739 +92,321 @@ function getState() {
 }
 
 // =====================================
-// Player Character Data Model
+// Character Data Model
 // =====================================
-
-// Constants
-
-const BASE_HEALTH = 100;
-const BASE_DAMAGE = 25;
-const BASE_DAMAGE_MAGIC = 35;
+const BASE_HEALTH             = 100;
+const BASE_DAMAGE             = 25;
+const BASE_DAMAGE_MAGIC       = 35;
+const MIN_DAMAGE              = 3;
 const VILLAIN_HEALTH_PER_KILL = 30;
-const BASE_HEAL_RATE = 15;
+const BASE_HEAL_RATE          = 15;
 
-const characterPools = {
-    hero: { tank: [], dps: [], support: [], mage: [] },
-    villain: { brute: [], agile: [], mage: [] },
-};
+// CSV speed (0-100) → movement multiplier. Kept in a 0.6x–1.4x band so a
+// low-speed character is slow but still playable.
+const speedMultiplier = spd => 0.6 + 0.8 * (spd / 100);
 
-const characters = new Map(); // player registry
-let heroesAlive = 3; // for villain scaling
-
-function populateCharacterPools(classifiedData) {
-    Object.assign(characterPools.hero, classifiedData.hero);
-    Object.assign(characterPools.villain, classifiedData.villain);
-    console.log(`Character pools ready: `, characterPools);
-}
-
-// randomly pick a charater from the pool
-function pickRandomCharater(role, chosenClass) {
-    const pool = characterPools[role]?.[chosenClass];
-
-    if (!pool || pool.length === 0) {
-        console.warn(`No characters available for ${role} / ${chosenClass}`);
-        return null;
-    }
-
-    const randomIndex = Math.floor(Math.random() * pool.length);
-    return pool[randomIndex]; // returns the raw CSV row
-}
-
-// Villain stat multiplier scales down as heroes are defeated
-// 3 heroes alive -> 3x, 1 alive -> 1.5x
+const characters = new Map(); // id → character
 
 /**
-    * Factory function - builds a character entity from CSV data
-    * @param {string} id - unique id 
-    * @param {string} role - 'hero' | 'villain'
-    * @param {string} chosenClass - tank | dps | support | mage OR brute | agile | mage
-    * @param {object} csvRow - randomly picked row
-    * @param {string} entityId - A-Frame entity id in index.html
-*/
-
-function createCharacter(id, role, chosenClass, csvRow, entityId) {
+ * Build a character from a CSV row.
+ * @param {string} id
+ * @param {string} role        - 'hero' | 'villain'
+ * @param {string} chosenClass - tank | dps | support | mage | brute | agile | villain_mage
+ * @param {object} stats       - { name, strength, magic, defense, speed, power } (0-100)
+ * @param {string} entityId    - A-Frame entity id
+ */
+function createCharacter(id, role, chosenClass, stats, entityId) {
     return {
         id,
         role,
         chosenClass,
         entityId,
-
-        // identity (from CSV)
-        name: csvRow.name,
-
-        // all players start with same base health
+        name:      stats.name,
         maxHealth: BASE_HEALTH,
-        health: BASE_HEALTH,
-        
-        // CSV stats
-        strength: csvRow.strength / 100, // melee dmg mult
-        magic: csvRow.magic / 100, // range dmg mult
-        defense: csvRow.defense / 100, // dmg reduction mult
-        speed: csvRow.speed / 100, // movement speed mult
-        power: csvRow.power / 100, // healing mult
-
-        // runtime states
-        isAlive: true,
-        exp: 0,
+        health:    BASE_HEALTH,
+        strength:  stats.strength / 100, // melee dmg mult
+        magic:     stats.magic    / 100, // ranged dmg mult
+        defense:   stats.defense  / 100, // dmg reduction mult
+        speed:     stats.speed    / 100, // movement (see speedMultiplier)
+        power:     stats.power    / 100, // healing mult
+        isAlive:   true,
+        exp:       0,
     };
 }
 
-// register finalized character into active match
-function addCharacter(id, role, chosenClass, csvRow, entityId) {
-    const character = createCharacter(id, role, chosenClass, csvRow, entityId);
+function addCharacter(id, role, chosenClass, stats, entityId) {
+    const character = createCharacter(id, role, chosenClass, stats, entityId);
     characters.set(id, character);
     initCooldowns(id);
-    console.log(`Registered: ${character.name} [${role} / ${chosenClass}]`);
     return character;
 }
 
-function clearCharacters() {
-    characters.clear();
-    heroesAlive = 3;
+function getLocalCharacter() {
+    return characters.get(LOCAL_ID);
 }
 
-// Combat Helpers
-
 function isAlive(id) {
-    const char = characters.get(id);
-    return char ? char.isAlive : false;
-};
+    return characters.get(id)?.isAlive ?? false;
+}
 
+// =====================================
+// Combat math
+// =====================================
 function calcDamage(attacker, defender, attackType) {
-    const base     = attackType === 'magic' ? BASE_DAMAGE_MAGIC : BASE_DAMAGE;
-    const statMult = attacker[attackType];
-    const rawDamage   = base * statMult;
-    const damageTaken = rawDamage * (1 - defender.defense);
-    return Math.max(3, damageTaken); // floor at 3, never less
+    const base      = attackType === 'magic' ? BASE_DAMAGE_MAGIC : BASE_DAMAGE;
+    const rawDamage = base * attacker[attackType];
+    return Math.max(MIN_DAMAGE, rawDamage * (1 - defender.defense));
 }
 
 /**
- * apply a hit from attacker to defender, fire events for UI updates & death
- * @param {string} attackerId
- * @param {string} defenderId
- * @param {string} attackerType - 'strength' | 'magic'
+ * Subtract a known amount of damage (used for local hits and for hits
+ * reported by other clients, so every screen agrees on the number).
  */
+function applyDamage(defenderId, damage, sourceId = null) {
+    const defender = characters.get(defenderId);
+    if (!defender || !defender.isAlive || getState() !== STATES.BATTLE) return 0;
 
+    defender.health = Math.max(0, defender.health - damage);
+    emit(GAME_EVENTS.HEALTH_CHANGED, {
+        characterId: defenderId,
+        health:      defender.health,
+        maxHealth:   defender.maxHealth,
+        sourceId,
+        isDamage:    true,
+    });
+
+    if (defender.health <= 0) handleDeath(defenderId, sourceId);
+    return damage;
+}
+
+/** Compute and apply a hit. Returns the damage dealt (0 if nothing happened). */
 function applyHit(attackerId, defenderId, attackType) {
     const attacker = characters.get(attackerId);
     const defender = characters.get(defenderId);
-
-    if (!attacker || !defender || !defender.isAlive) return;
-
-    const damage = calcDamage(attacker, defender, attackType);
-    defender.health = Math.max(0, defender.health - damage);
-
-    console.log(
-        `${attacker.name} hit ${defender.name} for ${damage.toFixed(2)}` + 
-        `(${attackType}) -> ${defender.health.toFixed(1)}/${defender.maxHealth} HP`
-    );
-
-    emit(GAME_EVENTS.HEALTH_CHANGED, { 
-        characterId: defenderId, 
-        health: defender.health, 
-        maxHealth: defender.maxHealth 
-    });
-
-    if (defender.health <= 0) {
-        handleDeath(defenderId);
-    }
+    if (!attacker || !defender || !defender.isAlive) return 0;
+    return applyDamage(defenderId, calcDamage(attacker, defender, attackType), attackerId);
 }
 
-function handleDeath(id) {
-    const char = characters.get(id);
-    if (!char || getState() !== STATES.BATTLE) return;
-
-    char.isAlive = false;
-
-    emit(GAME_EVENTS.CHARACTER_DEFEATED, { characterId: id, role: char.role });
-
-    // villain gets health for every killed player
-    if (char.role === 'hero') {
-        heroesAlive--;
-
-        const villain = [...characters.values()].find(c => c.role === 'villain');
-        if (villain && villain.isAlive) {
-            villain.health = Math.min(villain.maxHealth, villain.health + VILLAIN_HEALTH_PER_KILL);
-        
-            console.log(
-                `Villain gained ${VILLAIN_HEALTH_PER_KILL} HP from kill → ` +
-                `${villain.health.toFixed(1)}/${villain.maxHealth} HP`
-            );
-
-            emit(GAME_EVENTS.HEALTH_CHANGED, { characterId: villain.id, health: villain.health, maxHealth: villain.maxHealth });
-        }
-    }
-}
-
-/**
- * apply one tick of healing every second
- * heal per tick = BASE_HEAL_RATE * power mult
- * @param {string} healerId - the one dealing healing
- * @param {strign} healeeId - the one being healed
- * 
- * for self-heal, applyHeal('hero-2', 'hero-2')
- */
-function applyHeal(healerId, healeeId) {
-    const healer = characters.get(healerId);
+function applyHealAmount(healeeId, amount, healerId = null) {
     const healee = characters.get(healeeId);
-    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
-
-    const healAmt = BASE_HEAL_RATE * healer.power;
-    healee.health = Math.min(healee.maxHealth, healee.health + healAmt);
-
-    console.log(`${healer.name} healed ${healee.name} for ${healAmt.toFixed(2)} → ${healee.health.toFixed(1)}/${healee.maxHealth} HP`);
-
+    if (!healee || !healee.isAlive) return 0;
+    healee.health = Math.min(healee.maxHealth, healee.health + amount);
     emit(GAME_EVENTS.HEALTH_CHANGED, {
         characterId: healeeId,
         health:      healee.health,
         maxHealth:   healee.maxHealth,
-        });
+        sourceId:    healerId,
+    });
+    return amount;
+}
+
+function handleDeath(id, killerId = null) {
+    const char = characters.get(id);
+    if (!char || !char.isAlive || getState() !== STATES.BATTLE) return;
+
+    char.isAlive = false;
+    char.health  = 0;
+    emit(GAME_EVENTS.CHARACTER_DEFEATED, { characterId: id, role: char.role, killerId });
+
+    // villain recovers health for every hero it takes down
+    if (char.role === 'hero') {
+        const villain = [...characters.values()].find(c => c.role === 'villain');
+        if (villain && villain.isAlive) {
+            applyHealAmount(villain.id, VILLAIN_HEALTH_PER_KILL, villain.id);
+        }
+    }
+
+    checkWin();
 }
 
 // =====================================
 // Match Manager
 // =====================================
-const EXP_REWARD = {
-    win: 100,
-    loss: 25,
-};
+const EXP_REWARD = { win: 100, loss: 25 };
 
-let matchState = null; // current match's metadata
+let matchState = null;
 
 /**
- * all players selected characters, time to start the battle
+ * Every character for the match must be registered before this is called.
  * @param {string} villainId
  * @param {string[]} heroIds
  */
 function initMatch(villainId, heroIds) {
-    if (getState() !== STATES.CHARACTER_SELECT) {
-        console.warn('[Game] initMatch: already started, ignoring');
-        return;
-    }
-    heroIds = heroIds || [];
+    if (getState() !== STATES.CHARACTER_SELECT) return;
 
     matchState = {
         villainId,
-        heroIds,
-        winner: null, // 'hero' | 'villain'
+        heroIds:   heroIds || [],
+        winner:    null,
         startTime: Date.now(),
-        endTime: null,
+        endTime:   null,
     };
 
-    // start listening for deaths
-    document.addEventListener('game:characterDefeated', onCharacterDefeatedMatchCheck);
-
     transitionTo(STATES.BATTLE);
-    console.log(`Match started. Villain: ${villainId} vs Heroes: ${heroIds.join(', ')}`);
-
-    emit(GAME_EVENTS.MATCH_STARTED, { villainId, heroIds });
-}
-
-function onCharacterDefeatedMatchCheck(event) {
-    checkWin();
+    emit(GAME_EVENTS.MATCH_STARTED, { villainId, heroIds: matchState.heroIds });
 }
 
 function checkWin() {
-  if (!matchState || getState() !== STATES.BATTLE) return;
+    if (!matchState || getState() !== STATES.BATTLE) return;
 
-  console.log('[WIN CHECK] matchState.villainId:', matchState.villainId);
-  console.log('[WIN CHECK] isAlive(villain):', isAlive(matchState.villainId));
-  console.log('[WIN CHECK] all characters:');
-  characters.forEach((c, id) => {
-    console.log(`  ${id} | role:${c.role} | alive:${c.isAlive}`);
-  });
+    const heroes = [...characters.values()].filter(c => c.role === 'hero');
+    if (heroes.length === 0) return;
 
-  const villainDead = !isAlive(matchState.villainId);
-
-  // dynamically count living heroes from characters map
-  // don't rely on matchState.heroIds snapshot which may be incomplete
-  let livingHeroes = 0;
-  let totalHeroes  = 0;
-  characters.forEach(c => {
-    if (c.role !== 'hero') return;
-    totalHeroes++;
-    if (c.isAlive) livingHeroes++;
-  });
-
-  console.log('[WIN CHECK] villain dead:', villainDead, '| living heroes:', livingHeroes, '/ total:', totalHeroes);
-
-  // don't check win if no heroes registered yet
-  if (totalHeroes === 0) return;
-
-  const allHeroesDead = livingHeroes === 0;
-
-  if (villainDead) {
-    endMatch('hero');
-  } else if (allHeroesDead) {
-    endMatch('villain');
-  }
+    if (!isAlive(matchState.villainId))  endMatch('hero');
+    else if (heroes.every(h => !h.isAlive)) endMatch('villain');
 }
 
 /**
- * end match, award exp, fire game over event
- * @param {string} winnerRole - 'hero' | 'villain'
+ * End the match.
+ * @param {string}  winnerRole - 'hero' | 'villain'
+ * @param {boolean} remote     - true when another client decided the result
+ *                               (so we don't echo it back over the network)
  */
-function endMatch(winnerRole) {
-    if (!matchState) return;
+function endMatch(winnerRole, remote = false) {
+    if (!matchState || getState() !== STATES.BATTLE) return;
 
-    matchState.winner = winnerRole;
+    matchState.winner  = winnerRole;
     matchState.endTime = Date.now();
-
-    // stop death listener
-    document.removeEventListener('game:characterDefeated', onCharacterDefeatedMatchCheck);
 
     awardExp(winnerRole);
     transitionTo(STATES.GAME_OVER);
 
-    console.log(`Match over. ${winnerRole} wins.`);
-
     emit(GAME_EVENTS.MATCH_OVER, {
-        winner: winnerRole,
+        winner:    winnerRole,
         villainId: matchState.villainId,
-        heroIds: matchState.heroIds,
-        duration: matchState.endTime - matchState.startTime,
+        heroIds:   matchState.heroIds,
+        duration:  matchState.endTime - matchState.startTime,
+        remote,
     });
-
-    matchState = null;
 }
 
 function awardExp(winnerRole) {
     characters.forEach(char => {
-        const won = char.role === winnerRole;
-        char.exp += won ? EXP_REWARD.win : EXP_REWARD.loss;
-
-        console.log(
-            `${char.name} earned ${won ? EXP_REWARD.win : EXP_REWARD.loss} EXP` + 
-            ` (total: ${char.exp})`
-        );
-
-        emit(GAME_EVENTS.EXP_AWARDED, {
-            characterId: char.id,
-            amount: won ? EXP_REWARD.win : EXP_REWARD.loss,
-            total: char.exp,
-        });
+        const amount = char.role === winnerRole ? EXP_REWARD.win : EXP_REWARD.loss;
+        char.exp += amount;
+        emit(GAME_EVENTS.EXP_AWARDED, { characterId: char.id, amount, total: char.exp });
     });
-}
-
-function resetMatch() {
-    matchState = null;
-    clearCharacters();
-    transitionTo(STATES.CHARACTER_SELECT);
 }
 
 // =====================================
 // Combat System
 // =====================================
 const COOLDOWNS = {
-    magic: 1500, // was 3000
+    melee: 300,
+    magic: 1500,
     heal:  5000,
 };
 
 const CLASS_ATTACK_TYPE = {
-    // hero classes
-    tank: 'strength',
-    dps: 'strength',
-    // support has no attack type — they can only heal
-    mage: 'magic',
-    // villain classes
-    brute: 'strength',
-    agile: 'strength',
+    tank:         'strength',
+    dps:          'strength',
+    mage:         'magic',
+    brute:        'strength',
+    agile:        'strength',
     villain_mage: 'magic',
+    // support has no attack — heal only
 };
 
-// key: characterId, value: { magic: timestamp, heal: timestamp }
+const MAGIC_CLASSES = ['mage', 'villain_mage'];
+const MELEE_RANGE   = 4;   // how close you need to be to melee
+
+// characterId → { melee, magic, heal } timestamps
 const cooldownTracker = new Map();
 
-/**
- * initialize cooldown tracking upon initial join
- * called inside addCharacter
- */
 function initCooldowns(id) {
-    cooldownTracker.set(id, {
-        magic: 0,
-        heal: 0,
-    });
+    cooldownTracker.set(id, { melee: 0, magic: 0, heal: 0 });
 }
 
-/**
- * returns true if ability still on cooldown
- * @param {string} id
- * @param {string} ability - 'magic' | 'heal'
- */
-function isOnCooldown(id, ability) {
-    const tracker = cooldownTracker.get(id);
-    if (!tracker) return false;
-
-    const elapsed = Date.now() - tracker[ability];
-    return elapsed < COOLDOWNS[ability];
-}
-
-/**
- * returns how many ms remain for UI
- * @param {string} id 
- * @param {string} ability 
- */
 function getCooldownRemaining(id, ability) {
     const tracker = cooldownTracker.get(id);
     if (!tracker) return 0;
-
-    const elapsed = Date.now() - tracker[ability];
-    return Math.max(0, COOLDOWNS[ability] - elapsed);
+    return Math.max(0, COOLDOWNS[ability] - (Date.now() - tracker[ability]));
 }
 
-// Attack Methods
+function isOnCooldown(id, ability) {
+    return getCooldownRemaining(id, ability) > 0;
+}
+
+function startCooldown(id, ability) {
+    const tracker = cooldownTracker.get(id);
+    if (tracker) tracker[ability] = Date.now();
+}
+
 /**
- * melee has no cooldown
- * @param {string} attackerId 
- * @param {string} defenderId 
+ * Swing a melee attack: hits every living enemy within MELEE_RANGE.
+ * Returns an array of { targetId, damage } for the hits that landed.
  */
-function performMelee(attackerId, defenderId) {
+function performMeleeSwing(attackerId) {
     const attacker = characters.get(attackerId);
-    const defender = characters.get(defenderId);
+    if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return [];
+    if (isOnCooldown(attackerId, 'melee')) return [];
+    startCooldown(attackerId, 'melee');
 
-    if (!attacker || !defender || !attacker.isAlive || !defender.isAlive || getState() !== STATES.BATTLE) return;
+    emit(GAME_EVENTS.MELEE_SWING, { attackerId });
 
-    applyHit(attackerId, defenderId, 'strength');
+    const attackerEl = document.getElementById(attacker.entityId);
+    if (!attackerEl) return [];
+    const myPos = attackerEl.object3D.position;
 
-    emit(GAME_EVENTS.MELEE_FIRED, { attackerId, defenderId });
+    const hits = [];
+    characters.forEach(target => {
+        if (target.role === attacker.role || !target.isAlive) return;
+        const targetEl = document.getElementById(target.entityId);
+        if (!targetEl) return;
+        if (myPos.distanceTo(targetEl.object3D.position) > MELEE_RANGE) return;
+
+        const damage = applyHit(attackerId, target.id, 'strength');
+        if (damage > 0) {
+            hits.push({ targetId: target.id, damage });
+            emit(GAME_EVENTS.MELEE_FIRED, { attackerId, defenderId: target.id, damage });
+        }
+    });
+    return hits;
 }
 
 /**
- * magic attack has cooldown
- * @param {string} attackerId 
- * @param {object} direction - {x,y,z} unit vector of aim directin
+ * Fire a magic projectile.
+ * @param {string} attackerId
+ * @param {object} direction - {x,y,z} unit aim vector
+ * @returns {boolean} whether it fired
  */
 function performMagic(attackerId, direction) {
     const attacker = characters.get(attackerId);
+    if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return false;
+    if (isOnCooldown(attackerId, 'magic')) return false;
 
-  if (!attacker || !attacker.isAlive || getState() !== STATES.BATTLE) return false;
-    if (isOnCooldown(attackerId, 'magic')) {
-        const remaining = (getCooldownRemaining(attackerId, 'magic') / 1000).toFixed(1);
-        console.log(`${attacker.name} magic on cooldown - ${remaining}s remaining`);
-    return false;
-    }
-
-    cooldownTracker.get(attackerId).magic = Date.now();
-    console.log(`${attacker.name} fired magic towards ${JSON.stringify(direction)}`);
-
+    startCooldown(attackerId, 'magic');
     emit(GAME_EVENTS.MAGIC_FIRED, { attackerId, direction });
-
     return true;
 }
 
 /**
- * heal has cooldown
- * @param {string} healerId 
- * @param {string} healeeId 
+ * Heal (heroes only). Returns the amount healed, or 0.
  */
 function performHeal(healerId, healeeId) {
     const healer = characters.get(healerId);
     const healee = characters.get(healeeId);
+    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return 0;
+    if (getState() !== STATES.BATTLE || isOnCooldown(healerId, 'heal')) return 0;
 
-    if (!healer || !healee || !healer.isAlive || !healee.isAlive || healer.role !== 'hero') return;
-    if (isOnCooldown(healerId, 'heal')) {
-        const remaining = (getCooldownRemaining(healerId, 'heal') / 1000).toFixed(1);
-        console.log(`${healer.name} heal on cooldown - ${remaining}s remaining`);
-        return;
-    }
-
-    cooldownTracker.get(healerId).heal = Date.now();
-    applyHeal(healerId, healeeId);
-
-    emit(GAME_EVENTS.HEAL_PERFORMED, { healerId, healeeId });
+    startCooldown(healerId, 'heal');
+    const amount = applyHealAmount(healeeId, BASE_HEAL_RATE * healer.power, healerId);
+    emit(GAME_EVENTS.HEAL_PERFORMED, { healerId, healeeId, amount });
+    return amount;
 }
 
-/**
- * wrapper function to determine what attack type to call
- * @param {string} attackerId 
- * @param {string} defenderId - required for melee, ignored for magic
- * @param {object} direction  - required for magic, ignored for melee
- */
-function performAttack(attackerId, defenderId, direction) {
-    const attacker = characters.get(attackerId);
-    if (!attacker || !attacker.isAlive) return;
-
-    // Support class cannot attack — they are heal-only
-    if (attacker.chosenClass === 'support') {
-        console.log(`${attacker.name} is a support — cannot attack`);
-        return;
-    }
-
-    const attackType = CLASS_ATTACK_TYPE[attacker.chosenClass];
-    if (!attackType) {
-        console.warn(`No attack type defined for class: ${attacker.chosenClass}`);
-        return;
-    }
-
-    if (attackType === 'magic') {
-        performMagic(attackerId, direction);
-    } else {
-        performMelee(attackerId, defenderId);
-    }
+/** Characters simulated on this machine (local player + bots) own their hits. */
+function isSimulatedLocally(char) {
+    return !!char && (char.id === LOCAL_ID || char.isBot === true);
 }
 
-// =====================================
-// EXP & Progression -- FOR LATER IMPLEMENTATION
-// =====================================
-
 // =================================================
-// A-Frame Hooks - moving entities, animations, etc
+// A-Frame components
 // =================================================
-const PROJECTILE_SPEED = 10;  // units per second
-const PROJECTILE_RANGE = 20;  // max distance before projectile disappears
-const MELEE_RANGE = 4;   // how close you need to be to melee
-const CAMERA_OFFSET = { x: 0, y: 5, z: 10 }; // 3rd person offset
-
-// ============================================
-// PLAYER CONTROLLER
-// Attach to each player entity in index.html:
-// <a-entity id="player-hero-1" player-controller="characterId: hero-1">
-// ============================================
-AFRAME.registerComponent('player-controller', {
-  schema: {
-    characterId: { type: 'string' }, // links this entity to game.js character
-    isLocal:     { type: 'boolean', default: false }, // is this the local player?
-  },
-
-  init() {
-    this.keys = {};         // tracks which keys are currently held
-    this.velocity = new THREE.Vector3();
-
-    // only bind input for the local player
-    if (!this.data.isLocal) return;
-
-    this.onKeyDown = (e) => { this.keys[e.code] = true;  };
-    this.onKeyUp   = (e) => { this.keys[e.code] = false; };
-
-    window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('keyup',   this.onKeyUp);
-
-    /**
-     * Left mouse button behaviour depends on class:
-     *   support  → heal self
-     *   all others → melee attack
-     */
-    this.onMouseDown = (e) => {
-      if (e.button !== 0) return;
-      const char = characters.get(this.data.characterId);
-      if (char?.chosenClass === 'support') {
-        performHeal(this.data.characterId, this.data.characterId);
-      } else {
-        this.tryMelee();
-      }
-    };
-
-    /**
-     * Right mouse button behaviour depends on class:
-     *   support  → heal nearest living ally
-     *   mage     → fire magic projectile
-     *   all others → no right-click action (support classes already handled above)
-     */
-    this.onRightClick = (e) => {
-      e.preventDefault();
-      const char = characters.get(this.data.characterId);
-      if (!char) return;
-      if (char.chosenClass === 'support') {
-        this.tryHealAlly();
-      } else {
-        this.tryMagic();
-      }
-    };
-
-    // H key = heal (support: heal nearest ally; others: self-heal if they have the ability)
-    this.onHealKey = (e) => {
-      if (e.code !== 'KeyH') return;
-      const charId = this.data.characterId;
-      const char   = characters.get(charId);
-      if (!char) return;
-      if (char.chosenClass === 'support') {
-        this.tryHealAlly();
-      } else {
-        performHeal(charId, charId);
-      }
-    };
-
-    window.addEventListener('mousedown',       this.onMouseDown);
-    window.addEventListener('contextmenu',     this.onRightClick);
-    window.addEventListener('keydown',         this.onHealKey);
-  },
-
-  tick(time, delta) {
-    if (!this.data.isLocal) return;
-    if (getState() !== STATES.BATTLE) return;
-
-    const char = characters.get(this.data.characterId);
-    if (!char || !char.isAlive) return;
-
-    this.handleMovement(delta, char.speed);
-  },
-
-  /**
-   * Moves the entity based on WASD input.
-   * Speed stat (0-1) scales against a base movement speed.
-   * @param {number} delta  - ms since last frame, keeps movement frame-rate independent
-   * @param {number} speed  - character's speed multiplier (0-1)
-   */
-  handleMovement(delta, speed) {
-    const BASE_SPEED   = 5; // units per second at speed 1.0
-    const actualSpeed  = BASE_SPEED * speed * (delta / 1000);
-    const pos          = this.el.object3D.position;
-
-    if (this.keys['KeyW']) pos.z -= actualSpeed;
-    if (this.keys['KeyS']) pos.z += actualSpeed;
-    if (this.keys['KeyA']) pos.x -= actualSpeed;
-    if (this.keys['KeyD']) pos.x += actualSpeed;
-  },
-
-  /**
-   * Finds the nearest enemy and attempts a melee hit if in range.
-   */
-  tryMelee() {
-    if (getState() !== STATES.BATTLE) return;
-
-    const char    = characters.get(this.data.characterId);
-    if (!char || !char.isAlive) return;
-
-    const target  = this.getNearestEnemy();
-    if (!target)  return;
-
-    const dist    = this.distanceTo(target.entityId);
-    if (dist > MELEE_RANGE) {
-      console.log(`Too far to melee — ${dist.toFixed(2)} units away`);
-      return;
-    }
-
-    performMelee(this.data.characterId, target.id);
-  },
-
-  /**
-   * Fires a magic projectile in the direction the camera is facing.
-   */
-  tryMagic() {
-    if (getState() !== STATES.BATTLE) return;
-
-    const char = characters.get(this.data.characterId);
-    if (!char || !char.isAlive) return;
-
-    // get the direction the camera is currently facing
-    const camera    = document.getElementById('main-camera');
-    const direction = new THREE.Vector3();
-    camera.object3D.getWorldDirection(direction);
-
-    performMagic(this.data.characterId, {
-      x: direction.x,
-      y: direction.y,
-      z: direction.z,
-    });
-  },
-
-  /**
-   * Support class: heals the nearest living ally (same role) within range.
-   * Falls back to self-heal if no ally is nearby.
-   */
-  tryHealAlly() {
-    if (getState() !== STATES.BATTLE) return;
-    const charId = this.data.characterId;
-    const char   = characters.get(charId);
-    if (!char || !char.isAlive) return;
-
-    // Find nearest living teammate (same role, not self)
-    const allies = [...characters.values()].filter(c =>
-      c.id !== charId && c.role === char.role && c.isAlive
-    );
-
-    let target = null;
-    if (allies.length > 0) {
-      target = allies.sort((a, b) =>
-        this.distanceTo(a.entityId) - this.distanceTo(b.entityId)
-      )[0];
-    }
-
-    // Heal the ally, or self if none found
-    const healeeId = target ? target.id : charId;
-    performHeal(charId, healeeId);
-  },
-
-  /**
-   * Finds the nearest living enemy to the local player.
-   * Heroes target the villain, villain targets the nearest hero.
-   */
-  getNearestEnemy() {
-    const char    = characters.get(this.data.characterId);
-    if (!char) return null;
-
-    const enemies = [...characters.values()].filter(c => {
-      return c.role !== char.role && c.isAlive;
-    });
-
-    if (enemies.length === 0) return null;
-
-    // sort by distance, return closest
-    return enemies.sort((a, b) => {
-      return this.distanceTo(a.entityId) - this.distanceTo(b.entityId);
-    })[0];
-  },
-
-  /**
-   * Returns the distance in 3D units between this entity and another.
-   * @param {string} targetEntityId - the A-Frame entity id
-   */
-  distanceTo(targetEntityId) {
-    const targetEl = document.getElementById(targetEntityId);
-    if (!targetEl) return Infinity;
-
-    const myPos     = this.el.object3D.position;
-    const targetPos = targetEl.object3D.position;
-    return myPos.distanceTo(targetPos);
-  },
-
-  remove() {
-    if (!this.data.isLocal) return;
-    window.removeEventListener('keydown',     this.onKeyDown);
-    window.removeEventListener('keyup',       this.onKeyUp);
-    window.removeEventListener('mousedown',   this.onMouseDown);
-    window.removeEventListener('contextmenu', this.onRightClick);
-    window.removeEventListener('keydown',     this.onHealKey);
-  },
-});
-
-
-// ============================================
-// CAMERA FOLLOW
-// Attach to the camera rig in index.html:
-// <a-entity id="camera-rig" camera-follow="targetId: player-hero-1">
-// ============================================
-
-AFRAME.registerComponent('camera-follow', {
-  schema: {
-    targetId: { type: 'string' }, // entity id to follow
-  },
-
-  tick() {
-    const target = document.getElementById(this.data.targetId);
-    if (!target) return;
-
-    const targetPos = target.object3D.position;
-
-    // smoothly lerp camera towards target + offset
-    // lerp = linear interpolation, moves 10% closer each frame = smooth follow
-    this.el.object3D.position.lerp(
-      new THREE.Vector3(
-        targetPos.x + CAMERA_OFFSET.x,
-        targetPos.y + CAMERA_OFFSET.y,
-        targetPos.z + CAMERA_OFFSET.z,
-      ),
-      0.1 // lerp factor — lower = smoother but laggier
-    );
-  },
-});
-
-
-// ============================================
-// PROJECTILE
-// Spawned dynamically by the game-manager
-// when game:magicFired fires.
-// ============================================
+const PROJECTILE_SPEED      = 10;  // units per second
+const PROJECTILE_RANGE      = 20;  // max distance before despawn
+const PROJECTILE_HIT_RADIUS = 1.5;
+const _tmpVec               = new THREE.Vector3();
 
 AFRAME.registerComponent('projectile', {
   schema: {
@@ -885,29 +418,17 @@ AFRAME.registerComponent('projectile', {
 
   init() {
     this.distanceTravelled = 0;
-    this.direction = new THREE.Vector3(
-      this.data.dirX,
-      this.data.dirY,
-      this.data.dirZ,
-    ).normalize();
-
-    this.startPos = this.el.object3D.position.clone();
+    this.direction = new THREE.Vector3(this.data.dirX, this.data.dirY, this.data.dirZ).normalize();
   },
 
   tick(time, delta) {
-    const moveAmt = PROJECTILE_SPEED * (delta / 1000);
+    if (getState() !== STATES.BATTLE) { this.despawn(); return; }
 
-    // move projectile forward
+    const moveAmt = PROJECTILE_SPEED * (delta / 1000);
     this.el.object3D.position.addScaledVector(this.direction, moveAmt);
     this.distanceTravelled += moveAmt;
 
-    // despawn if out of range
-    if (this.distanceTravelled >= PROJECTILE_RANGE) {
-      this.despawn();
-      return;
-    }
-
-    // check collision with all living enemies
+    if (this.distanceTravelled >= PROJECTILE_RANGE) { this.despawn(); return; }
     this.checkCollision();
   },
 
@@ -915,35 +436,24 @@ AFRAME.registerComponent('projectile', {
     const attacker = characters.get(this.data.attackerId);
     if (!attacker) return;
 
-    // Projectiles are spawned on other clients for VFX sync. Only the locally-owned
-    // attacker should apply damage + broadcast the resulting hit.
-    const isLocalAttacker = (this.data.attackerId === 'villain') || (attacker.entityId === 'player-villain');
-    if (!isLocalAttacker) return;
+    // Projectiles also spawn on other clients purely for visuals. Only the
+    // machine that simulates the attacker applies (and broadcasts) the damage.
+    if (!isSimulatedLocally(attacker)) return;
 
-    // check against all characters on the opposite side
     for (const char of characters.values()) {
-      if (char.role === attacker.role) continue; // skip teammates
-      if (!char.isAlive)               continue;
-
+      if (char.role === attacker.role || !char.isAlive) continue;
       const targetEl = document.getElementById(char.entityId);
       if (!targetEl) continue;
 
-      const dist = this.el.object3D.position.distanceTo(
-        targetEl.object3D.position
-      );
-
-      // 1.5 unit hit radius
-      if (dist < 1.5) {
-        const damage = calcDamage(attacker, char, 'magic');
-
-        // apply locally
-        applyHit(this.data.attackerId, char.id, 'magic');
-
-        // sync to others (server relays to all other clients)
-        if (typeof sendAttackEvent === 'function') {
+      // compare against the body centre (projectiles fly at chest height)
+      _tmpVec.copy(targetEl.object3D.position);
+      _tmpVec.y += 1;
+      const dist = this.el.object3D.position.distanceTo(_tmpVec);
+      if (dist < PROJECTILE_HIT_RADIUS) {
+        const damage = applyHit(this.data.attackerId, char.id, 'magic');
+        if (damage > 0 && typeof sendAttackEvent === 'function' && !attacker.isBot) {
           sendAttackEvent('magic', char.id, damage);
         }
-
         this.despawn();
         return;
       }
@@ -951,165 +461,69 @@ AFRAME.registerComponent('projectile', {
   },
 
   despawn() {
-    this.el.parentNode.removeChild(this.el);
+    if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
   },
 });
 
-
-// ============================================
-// GAME MANAGER
-// Attach to the a-scene in index.html:
-// <a-scene game-manager>
-// ============================================
-
+// Attach to the a-scene: <a-scene game-manager>
 AFRAME.registerComponent('game-manager', {
-
   init() {
-    // spawn projectile when magic is fired
-    onMagicFired(({ attackerId, direction }) => {
-      this.spawnProjectile(attackerId, direction);
+    onMagicFired(({ attackerId, direction }) => this.spawnProjectile(attackerId, direction));
+    onHealthChanged(({ characterId, isDamage }) => {
+      if (isDamage) this.flashHit(characterId);
     });
-
-    // play hit animation when melee lands
-    onMeleeFired(({ attackerId, defenderId }) => {
-      this.playMeleeEffect(attackerId, defenderId);
-    });
-
-    // handle character death in the scene
-    onCharacterDefeated(({ characterId }) => {
-      this.handleDeathVisual(characterId);
-    });
-
-    // clean up scene when match ends
-    onMatchOver(({ winner }) => {
-      this.clearProjectiles();
-      console.log(`Match over — ${winner} wins!`);
-    });
+    onCharacterDefeated(({ characterId }) => this.handleDeathVisual(characterId));
+    onMatchOver(() => this.clearProjectiles());
   },
 
-  /**
-   * Dynamically creates a projectile entity and attaches
-   * the projectile component to it.
-   */
   spawnProjectile(attackerId, direction) {
     const attacker   = characters.get(attackerId);
-    if (!attacker)   return;
-
-    const attackerEl = document.getElementById(attacker.entityId);
+    const attackerEl = attacker && document.getElementById(attacker.entityId);
     if (!attackerEl) return;
 
-    const pos        = attackerEl.object3D.position;
-
+    const pos = attackerEl.object3D.position;
     const projectile = document.createElement('a-sphere');
     projectile.setAttribute('radius', '0.2');
-    projectile.setAttribute('color',  '#f39c12');
+    projectile.setAttribute('color', '#f39c12');
+    projectile.setAttribute('material', 'emissive: #ff6a00; emissiveIntensity: 0.8');
     projectile.setAttribute('position', `${pos.x} ${pos.y + 1} ${pos.z}`);
-    projectile.setAttribute('projectile', `
-      attackerId: ${attackerId};
-      dirX: ${direction.x};
-      dirY: ${direction.y};
-      dirZ: ${direction.z};
-    `);
+    projectile.setAttribute('projectile',
+      `attackerId: ${attackerId}; dirX: ${direction.x}; dirY: ${direction.y}; dirZ: ${direction.z}`);
     projectile.classList.add('projectile-entity');
-
     this.el.appendChild(projectile);
   },
 
-  /**
-   * Flashes the defender red briefly on a melee hit.
-   * Bisesh can swap this for a real hit animation later.
-   */
-  playMeleeEffect(attackerId, defenderId) {
-    const defender   = characters.get(defenderId);
-    if (!defender)   return;
+  /** Briefly tint every mesh in the character's model red. */
+  flashHit(characterId) {
+    const char = characters.get(characterId);
+    if (!char || char.id === LOCAL_ID) return;
+    const el = document.getElementById(char.entityId);
+    if (!el) return;
 
-    const defenderEl = document.getElementById(defender.entityId);
-    if (!defenderEl) return;
-
-    const mesh = defenderEl.getObject3D('mesh');
-    if (!mesh)  return;
-
-    // flash red for 200ms
-    mesh.material.color.set('#e74c3c');
-    setTimeout(() => mesh.material.color.set('#ffffff'), 200);
+    const tinted = [];
+    el.object3D.traverse(node => {
+      const mats = node.isMesh ? [].concat(node.material) : [];
+      mats.forEach(m => {
+        if (!m || !m.emissive || m.userData._flashing) return;
+        m.userData._flashing = true;
+        tinted.push([m, m.emissive.getHex()]);
+        m.emissive.setHex(0xaa1111);
+      });
+    });
+    setTimeout(() => tinted.forEach(([m, hex]) => {
+      m.emissive.setHex(hex);
+      m.userData._flashing = false;
+    }), 140);
   },
 
-  /**
-   * Visually removes a defeated character from the scene.
-   * Bisesh can replace this with a death animation later.
-   */
   handleDeathVisual(characterId) {
-    const char   = characters.get(characterId);
-    if (!char)   return;
-
-    // if (characterId === 'villain') return;
-    const localEl = document.getElementById('player-villain');
-    const localChar = [...characters.values()].find(c => c.entityId === 'player-villain');
-    if (localChar && characterId === localChar.id) return;
-
-    const charEl = document.getElementById(char.entityId);
-    if (!charEl) return;
-
-    // hide entity — don't fully remove so we can still reference it
-    charEl.setAttribute('visible', 'false');
+    const char = characters.get(characterId);
+    if (!char || char.id === LOCAL_ID) return; // local player switches to spectate instead
+    const el = document.getElementById(char.entityId);
+    if (el) el.setAttribute('visible', 'false');
   },
 
-  /**
-   * Removes all in-flight projectiles from the scene.
-   * Called on match end to clean up.
-   */
   clearProjectiles() {
-    const projectiles = this.el.querySelectorAll('.projectile-entity');
-    projectiles.forEach(p => p.parentNode.removeChild(p));
-  },
-});
-
-// ============================================
-// NAME TAG
-// Attach to any player entity:
-// <a-entity name-tag="label: Adventurer; color: #c9a84c">
-// Renders a floating text label above the character's head.
-// ============================================
-AFRAME.registerComponent('name-tag', {
-  schema: {
-    label: { type: 'string',  default: '' },
-    color: { type: 'color',   default: '#c9a84c' },
-    yOffset: { type: 'number', default: 2.4 },
-  },
-
-  init() {
-    // Background pill
-    this.bg = document.createElement('a-plane');
-    this.bg.setAttribute('width',    '1.6');
-    this.bg.setAttribute('height',   '0.36');
-    this.bg.setAttribute('color',    '#04060c');
-    this.bg.setAttribute('opacity',  '0.72');
-    this.bg.setAttribute('position', `0 ${this.data.yOffset} 0`);
-    this.bg.setAttribute('look-at',  '[camera]');
-
-    // Text label
-    this.text = document.createElement('a-text');
-    this.text.setAttribute('value',    this.data.label);
-    this.text.setAttribute('align',    'center');
-    this.text.setAttribute('color',    this.data.color);
-    this.text.setAttribute('width',    '1.4');
-    this.text.setAttribute('position', `0 ${this.data.yOffset + 0.01} 0`);
-    this.text.setAttribute('look-at',  '[camera]');
-    this.text.setAttribute('font',     'https://cdn.aframe.io/fonts/Exo2Bold.fnt');
-
-    this.el.appendChild(this.bg);
-    this.el.appendChild(this.text);
-  },
-
-  update() {
-    if (this.text) {
-      this.text.setAttribute('value', this.data.label);
-      this.text.setAttribute('color', this.data.color);
-    }
-  },
-
-  remove() {
-    if (this.bg)   this.el.removeChild(this.bg);
-    if (this.text) this.el.removeChild(this.text);
+    this.el.querySelectorAll('.projectile-entity').forEach(p => p.parentNode.removeChild(p));
   },
 });

@@ -1,100 +1,87 @@
 // ============================================
 // BILLBOARD HEALTH BAR COMPONENT
-// Projects a world position to screen space
-// and places an HTML health bar there
+// Projects the entity's head position to screen space and places an
+// HTML health bar there. Listens to game.js health / death events.
 // ============================================
-AFRAME.registerComponent('health-bar', {
-    schema: {
-    nickname: { type: 'string', default: 'Player' },
-    health:   { type: 'number', default: 100 },
-    maxHealth:{ type: 'number', default: 100 },
-    },
+const _hbWorldPos = new THREE.Vector3();
 
-    init() {
-    // create the HTML overlay element
+AFRAME.registerComponent('health-bar', {
+  schema: {
+    nickname:  { type: 'string', default: 'Player' },
+    health:    { type: 'number', default: 100 },
+    maxHealth: { type: 'number', default: 100 },
+  },
+
+  init() {
     this.container = document.createElement('div');
     this.container.className = 'health-bar-container';
     this.container.innerHTML = `
-        <div class="player-nickname">${this.data.nickname}</div>
-        <div class="health-bar-bg">
-        <div class="health-bar-fill" style="width:100%"></div>
-        </div>
+      <div class="player-nickname"></div>
+      <div class="health-bar-bg"><div class="health-bar-fill" style="width:100%"></div></div>
     `;
+    this.container.querySelector('.player-nickname').textContent = this.data.nickname;
     document.body.appendChild(this.container);
 
-    this.fill     = this.container.querySelector('.health-bar-fill');
-    this.nameEl   = this.container.querySelector('.player-nickname');
-    this.camera   = null;
-    this.renderer = null;
+    this.fill    = this.container.querySelector('.health-bar-fill');
+    this.nameEl  = this.container.querySelector('.player-nickname');
+    this.defeated = false;
 
-    // listen for health changes from game.js
-    const id = this.el.dataset.characterId || this.el.getAttribute('id');
-    this.characterId = id;
     this.onHealthChanged = (e) => {
-        if (e.detail.characterId !== this.characterId) return;
-        this.updateHealth(e.detail.health, e.detail.maxHealth);
+      if (e.detail.characterId === this.characterId()) this.updateHealth(e.detail.health, e.detail.maxHealth);
     };
-
     this.onDefeated = (e) => {
-        console.log('[HEALTHBAR] defeated event:', e.detail.characterId, '| my id:', this.characterId);
-        if (e.detail.characterId !== this.characterId) return;
-        this.container.style.display = 'none';
+      if (e.detail.characterId !== this.characterId()) return;
+      this.defeated = true;
+      this.container.style.display = 'none';
     };
-    document.addEventListener('game:healthChanged',      this.onHealthChanged);
-    document.addEventListener('game:characterDefeated',  this.onDefeated);
+    document.addEventListener('game:healthChanged',     this.onHealthChanged);
+    document.addEventListener('game:characterDefeated', this.onDefeated);
+  },
 
-    },
+  update() {
+    if (this.nameEl) this.nameEl.textContent = this.data.nickname;
+  },
 
-    // call this from game.js when health changes
-    updateHealth(health, maxHealth) {
+  // read lazily: match-setup sets data-character-id after the entity exists
+  characterId() {
+    return this.el.dataset.characterId || this.el.id;
+  },
+
+  updateHealth(health, maxHealth) {
     const pct = Math.max(0, (health / maxHealth) * 100);
     this.fill.style.width = `${pct}%`;
+    this.fill.style.background = pct > 60 ? '#2ecc71' : pct > 30 ? '#f39c12' : '#e74c3c';
+  },
 
-    // color shifts green → yellow → red
-    if (pct > 60)      this.fill.style.background = '#2ecc71';
-    else if (pct > 30) this.fill.style.background = '#f39c12';
-    else               this.fill.style.background = '#e74c3c';
-    },
-
-    tick() {
-    // lazy-grab camera and renderer once scene is ready
-    if (!this.camera) {
-        const camEl = document.getElementById('main-camera');
-        if (!camEl || !camEl.object3D) return;
-        this.camera   = camEl.object3D;
-        this.renderer = this.el.sceneEl.renderer;
+  tick() {
+    // never draw a bar over our own head, or for the dead
+    if (this.defeated || this.el.id === LOCAL_ENTITY || !this.el.object3D.visible) {
+      this.container.style.display = 'none';
+      return;
     }
 
-    // world position — place bar above the entity's head
-    const worldPos = new THREE.Vector3();
-    this.el.object3D.getWorldPosition(worldPos);
-    worldPos.y += 2.4; // float above head
+    const camera   = this.el.sceneEl.camera;
+    const renderer = this.el.sceneEl.renderer;
+    if (!camera || !renderer) return;
 
-    // project to screen space
-    const canvas   = this.renderer.domElement;
-    const projected = worldPos.clone().project(
-        this.el.sceneEl.camera
-    );
+    this.el.object3D.getWorldPosition(_hbWorldPos);
+    _hbWorldPos.y += 2.4; // float above head
+    _hbWorldPos.project(camera);
 
-    const x = (projected.x * 0.5 + 0.5) * canvas.clientWidth;
-    const y = (1 - (projected.y * 0.5 + 0.5)) * canvas.clientHeight;
-
-    // hide if behind camera
-    if (projected.z > 1) {
-        this.container.style.display = 'none';
-        return;
+    if (_hbWorldPos.z > 1) { // behind the camera
+      this.container.style.display = 'none';
+      return;
     }
 
+    const canvas = renderer.domElement;
     this.container.style.display = 'flex';
-    this.container.style.left    = `${x}px`;
-    this.container.style.top     = `${y}px`;
-    },
+    this.container.style.left = `${(_hbWorldPos.x * 0.5 + 0.5) * canvas.clientWidth}px`;
+    this.container.style.top  = `${(1 - (_hbWorldPos.y * 0.5 + 0.5)) * canvas.clientHeight}px`;
+  },
 
-    remove() {
+  remove() {
     document.removeEventListener('game:healthChanged',     this.onHealthChanged);
     document.removeEventListener('game:characterDefeated', this.onDefeated);
-    if (this.container && this.container.parentNode) {
-        this.container.parentNode.removeChild(this.container);
-    }
-    },
+    this.container?.parentNode?.removeChild(this.container);
+  },
 });

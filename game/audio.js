@@ -1,124 +1,85 @@
 // =================================================
-// Depends on game.js
-// Load after game.js in index.html:
+// AUDIO — sound registry, playback, and game-event hooks
+// Loaded by the menu pages and the arena. Event hooks only attach on
+// pages where game.js is present.
 // =================================================
 
-// holds sounds
+// resolve asset paths relative to this script, so it works from any page
+const AUDIO_BASE = new URL('../assets/sounds/', document.currentScript.src).href;
+
 const SOUNDS = {
-    heal: 'assets/sounds/skyrim-healing.mp3',
-    sword_sound: 'assets/sounds/sword_sound_effect.mp3',
-    death: 'assets/sounds/scream.mp3',
-    fire_ball: 'assets/sounds/fireball.mp3',
-    victory_hero: 'assets/sounds/victory-hero.mp3',
-    victory_villain: 'assets/sounds/victory-villian.mp3',
-    game_theme: 'assets/sounds/Dark Souls - CC.mp3',
-    battle_theme: 'assets/sounds/battle-dun-dun.mp3',
-    transition_theme: 'assets/sounds/transition.mp3'
+    heal:             'skyrim-healing.mp3',
+    sword_sound:      'sword_sound_effect.mp3',
+    death:            'scream.mp3',
+    fire_ball:        'fireball.mp3',
+    victory_hero:     'victory-hero.mp3',
+    victory_villain:  'victory-villian.mp3',
+    game_theme:       'Dark Souls - CC.mp3',
+    battle_theme:     'battle-dun-dun.mp3',
+    transition_theme: 'transition.mp3',
 };
 
-// audio cache
 const audioCache = {};
 
 function loadSound(key) {
-    console.log("i am loading sound here")
     if (audioCache[key]) return audioCache[key];
-    const path = SOUNDS[key];
-    if (!path) {
-        console.warn(`[Audio] No path registered for sound key: "${key}"`);
-        return null;
-    }
-    const audio = new Audio(path);
+    const file = SOUNDS[key];
+    if (!file) return null;
+    const audio = new Audio(AUDIO_BASE + encodeURIComponent(file));
     audio.preload = 'auto';
     audioCache[key] = audio;
     return audio;
 }
 
-// Pre-load all registered sounds on script parse.
-Object.keys(SOUNDS).forEach(loadSound);
-
-// ─── Playback Helper ──────────────────────────────
 /**
- * Play a registered sound by key.
- * Resets currentTime so rapid re-triggers always play from the start.
- * @param {string} key - key from the SOUNDS registry
- * @param {number} [volume=1] - 0.0 to 1.0
+ * Play a registered sound. Restarts it if already playing.
+ * @param {string}  key
+ * @param {number}  [volume=1]
+ * @param {boolean} [loop=false]
+ * @param {boolean} [keepTime=false] - resume from the current position instead of restarting
  */
-function playSound(key, volume = 1, loop = false) {
-    console.log("i am playing the sound here")
+function playSound(key, volume = 1, loop = false, keepTime = false) {
     const audio = loadSound(key);
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, volume));
-    audio.currentTime = 0;
-    audio.loop = loop
-    audio.play().catch(err => {
-        // Browsers block autoplay until the user interacts with the page.
-        // This is a silent fallback — the first keypress (H) counts as interaction,
-        // so in practice this only fires if somehow triggered before any user input.
-        console.warn(`[Audio] Playback blocked for "${key}":`, err.message);
-    });
+    if (!keepTime) audio.currentTime = 0;
+    audio.loop = loop;
+    // browsers block audio until the first user gesture — ignore that rejection
+    audio.play().catch(() => {});
 }
 
-// for ensuring 
-function getLocalCharacterId() {
-    console.log("finding data of character")
-    const localEl = document.querySelector('[data-character-id][data-role]');
-    // The local player entity carries both attributes; remote entities only get
-    // data-character-id injected by network.js after the fact.
-    // Fallback: look for the element whose player-controller has isLocal=true.
-    if (localEl) return localEl.dataset.characterId;
-
-    // Fallback path: find via A-Frame component if DOM attr isn't ready yet.
-    const controllerEl = document.querySelector('[player-controller]');
-    if (controllerEl) {
-        const comp = controllerEl.components['player-controller'];
-        if (comp && comp.data.isLocal) return comp.data.characterId;
-    }
-
-    return null;
+function stopSound(key) {
+    const audio = audioCache[key];
+    if (audio) audio.pause();
 }
 
-// event wiring
-// wait for the DOM so A-Frame and game.js are fully initialised.
-// listen for every event emitted by game.js.
-count = 0;
-document.addEventListener('DOMContentLoaded', () => {
+// ── Arena-only event wiring ──────────────────────────────────────────────
+if (typeof GAME_EVENTS !== 'undefined') {
+    ['heal', 'sword_sound', 'death', 'fire_ball', 'victory_hero', 'victory_villain', 'battle_theme']
+        .forEach(loadSound);
 
     onHealPerformed(({ healerId }) => {
-        const localId = getLocalCharacterId();
-        if (!localId) return;
-        if (healerId !== localId) return;
-
-        playSound('heal');
+        if (healerId === LOCAL_ID) playSound('heal', 0.7);
     });
 
     onCharacterDefeated(({ characterId }) => {
-        const localId = getLocalCharacterId();
-        if (!localId) return;
-        if (characterId !== localId) return; // only play if the local player died
-
-        playSound('death', volume = 0.6);
+        if (characterId === LOCAL_ID) playSound('death', 0.6);
     });
 
     onMagicFired(({ attackerId }) => {
-        const localId = getLocalCharacterId();
-        if (!localId) return;
-        if (attackerId !== localId) return;
-
-        playSound('fire_ball');
+        if (attackerId === LOCAL_ID) playSound('fire_ball', 0.7);
     });
 
-    onMeleeFired(({ attackerId }) => {
-        const localId = getLocalCharacterId();
-        if (!localId) return;
-        if (attackerId !== localId) return;
-
-        playSound('sword_sound');
+    onMeleeSwing(({ attackerId }) => {
+        if (attackerId === LOCAL_ID) playSound('sword_sound', 0.7);
     });
 
     onMatchStarted(() => {
-        playSound('battle_theme', volume = 0.40, loop = true);
+        playSound('battle_theme', 0.4, true);
     });
 
-    vict
-
-});
+    onMatchOver(({ winner }) => {
+        stopSound('battle_theme');
+        playSound(winner === 'hero' ? 'victory_hero' : 'victory_villain', 0.8);
+    });
+}

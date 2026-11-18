@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slaying Goliath</title>
+
+  <!-- A-Frame + physics -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.4/dist/aframe-physics-system.min.js"></script>
+
+  <script src="game/game.js"></script>
+  <script src="game/healthbar.js"></script>
+  <script src="game/physics.js"></script>
+  <script src="game/network.js"></script>
+  <script src="game/match-setup.js"></script>
+  <script src="game/spectator.js"></script>
+  <script src="game/audio.js"></script>
+  <script src="game/ui.js"></script>
+  <style>
+    /* Health bar styles — float above canvas */
+    .health-bar-container {
+      position: absolute;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+    }
+
+    .player-nickname {
+      color: white;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      text-shadow: 0 0 4px #000, 0 0 8px #000;
+      margin-bottom: 3px;
+      white-space: nowrap;
+    }
+
+    .health-bar-bg {
+      width: 60px;
+      height: 6px;
+      background: #333;
+      border: 1px solid #000;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      background: #2ecc71;
+      transition: width 0.2s, background 0.2s;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <a-scene
+    id="main-scene"
+    renderer="antialias: true"
+    shadow="type: pcfsoft"
+    physics="gravity: -9.8"
+    game-manager
+    network-lerp
+  >
+
+    <a-assets timeout="10000">
+      <img id="sky_night" src="assets/textures/sky_night.jpg"/>
+      <!-- villain classes -->
+      <a-asset-item id="model-villain-mage" src="assets/models/villain_mage.glb"></a-asset-item>
+      <a-asset-item id="model-brute"        src="assets/models/brute.glb"></a-asset-item>
+      <a-asset-item id="model-agile"        src="assets/models/agile.glb"></a-asset-item>
+      <!-- hero classes -->
+      <a-asset-item id="model-hero-mage"    src="assets/models/hero_mage.glb"></a-asset-item>
+      <a-asset-item id="model-support"      src="assets/models/support.glb"></a-asset-item>
+      <a-asset-item id="model-dps"          src="assets/models/dps.glb"></a-asset-item>
+      <a-asset-item id="model-tank"         src="assets/models/tank.glb"></a-asset-item>
+      <a-asset-item id="sword"              src="assets/models/sword.glb"></a-asset-item>
+      <a-asset-item id="arena"              src="assets/models/arena.glb"></a-asset-item>
+    </a-assets>
+
+    <a-sky src="#sky_night"></a-sky>
+
+    <!-- Stage -->
+    <a-entity id="stage">
+      <a-gltf-model src="#arena" position="0 -0.3 0" scale="1"></a-gltf-model>
+      <!-- invisible collision floor matching the arena surface -->
+      <a-box
+        id="platform"
+        position="0 2.3 0"
+        width="30" height="0.2" depth="30"
+        visible="false"
+        static-body="shape: box"
+      ></a-box>
+    </a-entity>
+
+    <!-- Lighting -->
+    <a-entity light="type: ambient; color: #ffffff; intensity: 0.1"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="5 10 5" shadow="cast: true"></a-entity>
+
+    <!-- Local player — first-person, physics-driven. Configured by match-setup.js -->
+    <a-entity
+      id="local-player"
+      position="0 3 0"
+      dynamic-body="mass: 5; linearDamping: 0.99; angularDamping: 1.0"
+      player-physics
+      attack-input
+    >
+      <a-camera
+        id="main-camera"
+        position="0 2 -0.2"
+        look-controls="pointerLockEnabled: true"
+        wasd-controls="enabled: false"
+      ></a-camera>
+    </a-entity>
+
+  </a-scene>
+
+</body>
+</html>

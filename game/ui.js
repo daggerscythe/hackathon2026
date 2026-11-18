@@ -723,21 +723,27 @@ let   _totalKills = 0;
 let   _localCharId = null;           // set once we know local player
 
 // Cooldown tracking for the HUD (mirrors game.js but we only read it here)
+// `cooldown` is the game.js COOLDOWNS key each HUD slot reads from
 const CD_CONFIG = {
-  magic:     { label: 'Magic',      key: 'LMB', icon: '🔮', duration: 3000 },
-  heal_ally: { label: 'Heal Ally',  key: 'LMB', icon: '❤️',  duration: 5000 },
-  heal_self: { label: 'Heal Self',  key: 'RMB', icon: '💚', duration: 5000 },
-  melee:     { label: 'Melee',      key: 'LMB', icon: '⚔️',  duration: 0    },
+  magic:     { label: 'Magic',      key: 'LMB', icon: '🔮', cooldown: 'magic' },
+  heal_ally: { label: 'Heal Ally',  key: 'LMB', icon: '❤️', cooldown: 'heal'  },
+  heal_self: { label: 'Heal Self',  key: 'RMB', icon: '💚', cooldown: 'heal'  },
+  melee:     { label: 'Melee',      key: 'LMB', icon: '⚔️', cooldown: 'melee' },
 };
 
 const _cdTimers  = {};   // ability → { lastUsed, intervalId }
 const _cdEls     = {};   // ability → { sweep, timer }
 
-// Timer variables
-let timeLeft = 180; // 3 minutes in seconds
+// Round timer — heroes win if the villain hasn't finished them by 0:00
+const ROUND_SECONDS = 180;
+let timeLeft = ROUND_SECONDS;
+let _timerInterval = null;
 
 function startRoundTimer() {
-  const interval = setInterval(() => {
+  clearInterval(_timerInterval);
+  timeLeft = ROUND_SECONDS;
+  const interval = _timerInterval = setInterval(() => {
+    if (getState() !== STATES.BATTLE) { clearInterval(interval); return; }
     timeLeft--;
 
     const mins = Math.floor(timeLeft / 60);
@@ -751,9 +757,7 @@ function startRoundTimer() {
     if (timeLeft <= 0) {
       clearInterval(interval);
       timerEl.textContent = '0:00';
-      if (typeof endMatch === 'function' && getState() === STATES.BATTLE) {
-        endMatch('hero');
-      }
+      endMatch('hero');
     }
   }, 1000);
 }
@@ -979,8 +983,8 @@ const CLASS_ABILITIES = {
 
 const ABILITY_DISPLAY = [
   { key: 'melee', icon: '\u2694', label: 'Melee', mod: 'pip-melee' },
-  { key: 'magic', icon: '\U0001F52E', label: 'Magic', mod: 'pip-magic' },
-  { key: 'heal',  icon: '\U0001F49A', label: 'Heal',  mod: 'pip-heal'  },
+  { key: 'magic', icon: '🔮', label: 'Magic', mod: 'pip-magic' },
+  { key: 'heal',  icon: '💚', label: 'Heal',  mod: 'pip-heal'  },
 ];
 
 function buildAbilityPips(containerId, chosenClass) {
@@ -1054,8 +1058,6 @@ function updateBar(characterId, health, maxHealth) {
     spawnFloatingNumber(characterId, delta, isHeal);
   }
 
-  // track damage for end-screen
-  if (!isHeal) _totalDmgDealt += delta;
 }
 
 function _updateSingleBar(fillId, hpId, pct, health, maxHealth, isHeal) {
@@ -1089,15 +1091,17 @@ function _updateSingleBar(fillId, hpId, pct, health, maxHealth, isHeal) {
 // 4.  FLOATING DAMAGE NUMBERS
 // ─────────────────────────────────────────────────────────────────────────────
 function spawnFloatingNumber(characterId, amount, isHeal) {
-  // Attempt to find entity position in screen space
+  // Fallback: park near the matching health bar
   let x = window.innerWidth  * 0.5;
   let y = window.innerHeight * 0.5;
+  if (characterId === _villainId)      { x = 170; y = window.innerHeight - 80; }
+  else if (_heroRows.has(characterId)) { x = window.innerWidth - 170; y = window.innerHeight - 100; }
 
   // Try to project via A-Frame entity
   const char = characters?.get?.(characterId);
-  if (char) {
+  if (char && char.id !== LOCAL_ID) {
     const el = document.getElementById(char.entityId);
-    if (el && el.object3D) {
+    if (el && el.object3D && el.object3D.visible) {
       const scene    = document.querySelector('a-scene');
       const renderer = scene?.renderer;
       const camera   = scene?.camera;
@@ -1105,19 +1109,14 @@ function spawnFloatingNumber(characterId, amount, isHeal) {
         const pos = new THREE.Vector3();
         el.object3D.getWorldPosition(pos);
         pos.y += 2;
-        const proj = pos.clone().project(camera);
-        const canvas = renderer.domElement;
-        x = (proj.x * 0.5 + 0.5) * canvas.clientWidth  + (Math.random() - 0.5) * 30;
-        y = (1 - (proj.y * 0.5 + 0.5)) * canvas.clientHeight;
+        const proj = pos.project(camera);
+        if (proj.z < 1) { // in front of the camera
+          const canvas = renderer.domElement;
+          x = (proj.x * 0.5 + 0.5) * canvas.clientWidth  + (Math.random() - 0.5) * 30;
+          y = (1 - (proj.y * 0.5 + 0.5)) * canvas.clientHeight;
+        }
       }
     }
-  }
-
-  // Fallback: park near the health bar
-  if (characterId === _villainId) {
-    x = 170; y = window.innerHeight - 80;
-  } else if (_heroRows.has(characterId)) {
-    x = window.innerWidth - 170; y = window.innerHeight - 100;
   }
 
   const div = document.createElement('div');
@@ -1136,7 +1135,6 @@ function spawnFloatingNumber(characterId, amount, isHeal) {
 const MAX_KF_ENTRIES = 5;
 
 function pushKillFeed(characterId, role) {
-  _totalKills++;
 
   const char  = characters?.get?.(characterId);
   const name  = char ? char.name : characterId;
@@ -1192,15 +1190,10 @@ function startCooldownLoop(charId) {
 
   function tick() {
     if (!_localCdId) return;
-    ['magic','heal'].forEach(ab => {
-      const el  = _cdEls[ab];
-      if (!el) return;
-
-      // Read remaining time from game.js
-      const remaining = (typeof getCooldownRemaining === 'function')
-        ? getCooldownRemaining(_localCdId, ab)
-        : 0;
-      const total     = CD_CONFIG[ab].duration;
+    Object.entries(_cdEls).forEach(([ab, el]) => {
+      const cdKey     = CD_CONFIG[ab].cooldown;
+      const remaining = getCooldownRemaining(_localCdId, cdKey);
+      const total     = COOLDOWNS[cdKey];
       const frac      = total > 0 ? remaining / total : 0;
 
       el.sweep.style.transform = `scaleY(${frac})`;
@@ -1277,18 +1270,19 @@ function wireGameEvents() {
     showBanner('Battle!', 2000);
     startRoundTimer();
 
-    // read local player's class from sessionStorage
-    const myClass = sessionStorage.getItem('selectedClass') || 'brute';
-    buildCooldownSlots(myClass);
-
-    _localCharId = sessionStorage.getItem('selectedRole') === 'villain'
-      ? 'villain'
-      : sessionStorage.getItem('clientId');
+    const me = getLocalCharacter();
+    buildCooldownSlots(me?.chosenClass);
+    _localCharId = LOCAL_ID;
     startCooldownLoop(_localCharId);
   });
 
   // Health changed
-  onHealthChanged(({ characterId, health, maxHealth }) => {
+  onHealthChanged(({ characterId, health, maxHealth, sourceId, isDamage }) => {
+    // end-screen stat: damage dealt by the local player only
+    if (isDamage && sourceId === LOCAL_ID) {
+      const before = _hpCache.get(characterId)?.health ?? health;
+      _totalDmgDealt += Math.max(0, before - health);
+    }
     updateBar(characterId, health, maxHealth);
 
     // Log significant hits
@@ -1308,7 +1302,8 @@ function wireGameEvents() {
   });
 
   // Character defeated
-  onCharacterDefeated(({ characterId, role }) => {
+  onCharacterDefeated(({ characterId, role, killerId }) => {
+    if (killerId === LOCAL_ID) _totalKills++;
     pushKillFeed(characterId, role);
 
     // Grey out hero row if a hero dies
@@ -1353,9 +1348,6 @@ function wireGameEvents() {
 
   // State changed
   onStateChange(({ current }) => {
-    if (current === STATES.BATTLE) {
-      showBanner('Battle!', 2000);
-    }
     if (current === STATES.GAME_OVER) {
       showBanner('Match Over', -1); // keep visible
     }
@@ -1364,6 +1356,8 @@ function wireGameEvents() {
   // Match over
   onMatchOver(({ winner, duration }) => {
     if (_cdRafId) cancelAnimationFrame(_cdRafId);
+    clearInterval(_timerInterval);
+    if (document.pointerLockElement) document.exitPointerLock();
     const elapsed = duration ?? (Date.now() - (_matchStart || Date.now()));
     showGameOver(winner, elapsed);
   });
@@ -1375,7 +1369,7 @@ function wireGameEvents() {
 // ─────────────────────────────────────────────────────────────────────────────
 const UI = {
   onPlayAgain() {
-    window.location.href = '/UI/menu.html';
+    window.location.href = 'UI/menu.html';
   }
 };
 

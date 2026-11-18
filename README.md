@@ -140,14 +140,25 @@ Characters are classified at load time by their stats. A player picks a class du
  
 ---
 
+## Running locally
+```
+cd backend
+npm install
+node index.js        # serves the game + lobby on http://localhost:9091 (PORT env to change)
+```
+Open `http://localhost:9091`. Friends on the same network join with the LAN address the server prints.
+
 ## Project Structure
 ```
-/game          → Core game logic (game.js, physics.js, network.js, ui.js)
-/UI            → Menu, lobby, and character select screens
+/game          → Core game logic (game.js, physics.js, network.js, match-setup.js, ui.js, audio.js)
+/UI            → Menu, mode select, and lobby / character select screens
 /assets        → 3D models, textures, audio
-/server        → WebSocket + HTTP server (index.js)
+/backend       → HTTP + WebSocket server (index.js)
+/tools         → Procedural low-poly model + arena generators used to make the GLBs
+/docs          → Design notes
 data.csv       → Character database (~780 characters)
-index.html     → Main game scene (A-Frame)
+index.html     → Entry point (opens the menu)
+arena.html     → Battle scene (A-Frame)
 ```
 
 ## MVP+++:

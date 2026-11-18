@@ -1,216 +1,148 @@
 // ============================================
-// PLAYER PHYSICS COMPONENT
-// handles WASD movement and jumping
+// LOCAL PLAYER — movement, jumping, and attack input
+// Depends on game.js
+// ============================================
+
+const BASE_MOVE_SPEED = 5;   // units per second at speed multiplier 1.0
+const JUMP_FORCE      = 12;
+
+// scratch objects reused every frame
+const _camQuat  = new THREE.Quaternion();
+const _camEuler = new THREE.Euler();
+
+/** Camera yaw/pitch in world space (works with pointer-lock look-controls). */
+function getCameraAngles() {
+  const cam = document.getElementById('main-camera');
+  if (!cam) return null;
+  cam.object3D.getWorldQuaternion(_camQuat);
+  _camEuler.setFromQuaternion(_camQuat, 'YXZ');
+  return _camEuler;
+}
+
+// ============================================
+// PLAYER PHYSICS COMPONENT — WASD + jump
 // ============================================
 AFRAME.registerComponent('player-physics', {
 
-    init() {
-        this.keys = {};
-        this.canJump = false;
-        this.jumping = false;
-        this.speed = 5;
-        this.jumpForce = 12;
-
-        this.onKeyDown = (e) => {
-            this.keys[e.code] = true;
-            if (e.code === 'Space' && this.canJump) {
-                this.jump();
-            }
-        };
-        this.onKeyUp = (e) => { this.keys[e.code] = false; };
-
-        window.addEventListener('keydown', this.onKeyDown);
-        window.addEventListener('keyup',   this.onKeyUp);
-
-        this.el.addEventListener('collide', (e) => {
-            this.onCollide(e);
-        });
-    },
-
-    jump() {
-        const body = this.el.components['dynamic-body'].body;
-        if (!body) return;
-        body.velocity.set(0, this.jumpForce, 0);
-        this.canJump = false;
-        this.jumping = true;
-    },
-
-    onCollide(e) {
-        const contact = e.detail.contact;
-        if (!contact) return;
-        const normal = contact.ni;
-        if (normal.y > 0.5) {
-            this.canJump = true;
-            this.jumping = false;
-        }
-    },
-
-    tick(time, delta) {
-        if (typeof isSpectating !== 'undefined' && isSpectating) return;
-
-        const bodyComponent = this.el.components['dynamic-body'];
-        if (!bodyComponent || !bodyComponent.body) return;
-        const body = bodyComponent.body;
-
-        const cam = document.getElementById('main-camera');
-        if (!cam) return;
-        const worldQuat = new THREE.Quaternion();
-        cam.object3D.getWorldQuaternion(worldQuat);
-        const euler = new THREE.Euler();
-        euler.setFromQuaternion(worldQuat, 'YXZ');
-        const angle = euler.y;
-
-        const moveX = (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0);
-        const moveZ = (this.keys['KeyS'] ? 1 : 0) - (this.keys['KeyW'] ? 1 : 0);
-        const vx = moveX * Math.cos(angle) + moveZ * Math.sin(angle);
-        const vz = -moveX * Math.sin(angle) + moveZ * Math.cos(angle);
-        const spd = this.speed * (delta / 1000) * 60;
-        body.velocity.x = vx * spd;
-        body.velocity.z = vz * spd;
-
-        const isFalling = body.velocity.y < -0.1;
-        if (isFalling) {
-            this.canJump = false;
-            this.jumping = false;
-        }
-        if (this.canJump && !this.jumping) {
-            body.velocity.y = Math.max(body.velocity.y, 0);
-        }
-
-        body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
-
-        // rotate villain model to face camera direction
-        const modelEl = document.getElementById('villain-model');
-        if (modelEl) modelEl.object3D.rotation.y = euler.y + Math.PI;
-
-        // rotate sword with same yaw + optional pitch
-        const weaponEl = document.getElementById('local-weapon');
-        if (weaponEl) {
-          weaponEl.object3D.rotation.y = euler.y;
-          weaponEl.object3D.rotation.x = euler.x;
-        }
-    },
-
-    remove() {
-        window.removeEventListener('keydown', this.onKeyDown);
-        window.removeEventListener('keyup',   this.onKeyUp);
-    },
-});
-
-// ============================================
-// MELEE HITBOX COMPONENT
-// ============================================
-AFRAME.registerComponent('melee-hitbox', {
-  schema: {
-    characterId: { type: 'string' },
-    duration:    { type: 'number', default: 300 },
-  },
-
   init() {
-    this.active   = false;
-    this.hitbox   = null;
-    this.hitTimer = null;
+    this.keys    = {};
+    this.canJump = false;
+    this.jumping = false;
+
+    this.onKeyDown = (e) => {
+      this.keys[e.code] = true;
+      if (e.code === 'Space' && this.canJump) this.jump();
+    };
+    this.onKeyUp = (e) => { this.keys[e.code] = false; };
+
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup',   this.onKeyUp);
+    this.el.addEventListener('collide', (e) => this.onCollide(e));
   },
 
-  spawn() {
-    if (this.active) return;
-    this.active = true;
-    this.checkHits();
-    this.hitTimer = setTimeout(() => this.despawn(), this.data.duration);
+  /** Movement speed from the local character's CSV speed stat. */
+  moveSpeed() {
+    const char = getLocalCharacter();
+    return BASE_MOVE_SPEED * (char ? speedMultiplier(char.speed * 100) : 1);
   },
 
-  checkHits() {
-    const attacker = characters.get(this.data.characterId);
-    if (!attacker) return;
-
-    const myPos = this.el.object3D.position;
-
-    characters.forEach(target => {
-      if (target.role === attacker.role) return;
-      if (!target.isAlive)               return;
-
-      const targetEl = document.getElementById(target.entityId);
-      if (!targetEl) return;
-
-      const targetPos = targetEl.object3D.position;
-      const dist      = myPos.distanceTo(targetPos);
-
-      if (dist <= MELEE_RANGE) {
-        const damage = calcDamage(attacker, target, 'strength');
-        applyHit(this.data.characterId, target.id, 'strength');
-        if (typeof sendAttackEvent === 'function') sendAttackEvent('melee', target.id, damage);
-      }
-    });
+  jump() {
+    const body = this.el.components['dynamic-body']?.body;
+    if (!body) return;
+    body.velocity.set(body.velocity.x, JUMP_FORCE, body.velocity.z);
+    this.canJump = false;
+    this.jumping = true;
   },
 
-  despawn() {
-    this.active = false;
-    if (this.hitbox && this.hitbox.parentNode) {
-      this.hitbox.parentNode.removeChild(this.hitbox);
-      this.hitbox = null;
+  onCollide(e) {
+    const contact = e.detail.contact;
+    if (contact && contact.ni.y > 0.5) {
+      this.canJump = true;
+      this.jumping = false;
     }
-    clearTimeout(this.hitTimer);
+  },
+
+  tick() {
+    if (typeof isSpectating !== 'undefined' && isSpectating) return;
+
+    const body = this.el.components['dynamic-body']?.body;
+    if (!body) return;
+
+    const angles = getCameraAngles();
+    if (!angles) return;
+    const yaw = angles.y;
+
+    const inBattle = getState() === STATES.BATTLE;
+    const moveX = inBattle ? (this.keys['KeyD'] ? 1 : 0) - (this.keys['KeyA'] ? 1 : 0) : 0;
+    const moveZ = inBattle ? (this.keys['KeyS'] ? 1 : 0) - (this.keys['KeyW'] ? 1 : 0) : 0;
+    const len   = Math.hypot(moveX, moveZ) || 1; // no faster diagonals
+    const spd   = this.moveSpeed();
+
+    body.velocity.x = ((moveX * Math.cos(yaw) + moveZ * Math.sin(yaw)) / len) * spd;
+    body.velocity.z = ((-moveX * Math.sin(yaw) + moveZ * Math.cos(yaw)) / len) * spd;
+
+    if (body.velocity.y < -0.1) {
+      this.canJump = false;
+      this.jumping = false;
+    }
+    if (this.canJump && !this.jumping) {
+      body.velocity.y = Math.max(body.velocity.y, 0);
+    }
+
+    // stay upright
+    body.quaternion.set(0, body.quaternion.y, 0, body.quaternion.w);
+
+    // point the sword where the camera looks
+    const weaponEl = document.getElementById('local-weapon');
+    if (weaponEl) {
+      weaponEl.object3D.rotation.y = yaw;
+      weaponEl.object3D.rotation.x = angles.x;
+    }
   },
 
   remove() {
-    this.despawn();
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup',   this.onKeyUp);
   },
 });
 
 // ============================================
-// ATTACK INPUT COMPONENT
+// ATTACK INPUT COMPONENT — mouse buttons by class
+//   melee classes : LMB swing
+//   mage classes  : LMB fireball
+//   support       : LMB heal nearest ally, RMB heal self
 // ============================================
 AFRAME.registerComponent('attack-input', {
 
   schema: {
-    characterId: { type: 'string', default: 'villain' },
-    attackClass:  { type: 'string', default: 'brute' },
+    attackClass: { type: 'string', default: 'brute' },
   },
 
   init() {
-    this.magicClasses = ['mage', 'villain_mage'];
-
     this.onMouseDown = (e) => {
       if (getState() !== STATES.BATTLE) return;
       if (typeof isSpectating !== 'undefined' && isSpectating) return;
 
-      const isSupport = this.data.attackClass === 'support';
-      const isMagic   = this.magicClasses.includes(this.data.attackClass);
-
-      if (isSupport) {
-        if (e.button === 0) this.doHealAlly();  // LMB — heal teammate
-        if (e.button === 2) this.doHealSelf();  // RMB — heal self
+      if (this.data.attackClass === 'support') {
+        if (e.button === 0) this.doHealAlly();
+        if (e.button === 2) this.doHealSelf();
         return;
       }
 
-      if (e.button !== 0) return; // non-support only uses LMB
-      if (isMagic) {
-        this.doMagic();
-      } else {
-        this.doMelee();
-      }
+      if (e.button !== 0) return;
+      if (MAGIC_CLASSES.includes(this.data.attackClass)) this.doMagic();
+      else this.doMelee();
     };
 
+    this.onContextMenu = (e) => e.preventDefault();
 
-    this.onContextMenu = (e) => {
-      if (this.data.attackClass !== 'support') e.preventDefault();
-    };
     window.addEventListener('mousedown',   this.onMouseDown);
     window.addEventListener('contextmenu', this.onContextMenu);
-
-    // spawn permanent weapon after entity loads
-    // this.el.addEventListener('loaded', () => {
-    //   this.spawnPermanentWeapon();
-    // });
   },
 
   spawnPermanentWeapon() {
-    const magicClasses = ['mage', 'villain_mage'];
-    const isMagic = magicClasses.includes(this.data.attackClass);
-
-    if (isMagic) return;
-
-    console.log('[WEAPON] spawning sword | attackClass:', this.data.attackClass);
+    if (MAGIC_CLASSES.includes(this.data.attackClass) || this.data.attackClass === 'support') return;
+    if (document.getElementById('local-weapon')) return;
 
     const weapon = document.createElement('a-gltf-model');
     weapon.setAttribute('id',       'local-weapon');
@@ -218,94 +150,52 @@ AFRAME.registerComponent('attack-input', {
     weapon.setAttribute('scale',    '0.08 0.08 0.08');
     weapon.setAttribute('position', '0 0.2 0.5');
     weapon.setAttribute('rotation', '0 0 -45');
-
     this.el.appendChild(weapon);
   },
 
   doMelee() {
-    const char = characters.get(this.data.characterId);
-    if (!char || !char.isAlive) return;
-    const hitboxComp = this.el.components['melee-hitbox'];
-    if (hitboxComp) hitboxComp.spawn();
+    const hits = performMeleeSwing(LOCAL_ID);
+    if (typeof sendAttackEvent === 'function') {
+      hits.forEach(h => sendAttackEvent('melee', h.targetId, h.damage));
+    }
   },
 
   doMagic() {
-    const char = characters.get(this.data.characterId);
-    if (!char || !char.isAlive) return;
-    const cam       = document.getElementById('main-camera');
-    const worldQuat = new THREE.Quaternion();
-    cam.object3D.getWorldQuaternion(worldQuat);
-    const dir       = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat).normalize();
+    const angles = getCameraAngles();
+    if (!angles) return;
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(_camQuat).normalize();
     const direction = { x: dir.x, y: dir.y, z: dir.z };
 
-    const fired = performMagic(this.data.characterId, direction);
-    if (!fired) return;
-
-    if (typeof sendAbilityCast === 'function') {
+    if (performMagic(LOCAL_ID, direction) && typeof sendAbilityCast === 'function') {
       sendAbilityCast('magic', { direction });
     }
   },
 
-  getNearestEnemy() {
-    const char = characters.get(this.data.characterId);
-    if (!char) return null;
-
-    let nearest     = null;
-    let nearestDist = MELEE_RANGE;
-
-    characters.forEach(c => {
-      if (c.role === char.role) return;
-      if (!c.isAlive)           return;
-
-      const targetEl = document.getElementById(c.entityId);
-      if (!targetEl) return;
-
-      const myPos     = this.el.object3D.position;
-      const targetPos = targetEl.object3D.position;
-      const dist      = myPos.distanceTo(targetPos);
-
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest     = c;
-      }
-    });
-
-    return nearest;
-  },
-
   doHealAlly() {
-    const charId = this.data.characterId;
-    const char   = characters.get(charId);
-    if (!char || !char.isAlive) return;
+    const me = getLocalCharacter();
+    if (!me || !me.isAlive) return;
 
-    // find nearest living hero that isn't self
-    let nearestId   = null;
-    let nearestDist = Infinity;
+    const myPos = this.el.object3D.position;
+    let nearestId = null, nearestDist = Infinity;
     characters.forEach(c => {
-      if (c.id === charId)       return; // skip self
-      if (c.role !== 'hero')     return; // only heal heroes
-      if (!c.isAlive)            return;
+      if (c.id === me.id || c.role !== 'hero' || !c.isAlive) return;
       const el = document.getElementById(c.entityId);
       if (!el) return;
-      const d = this.el.object3D.position.distanceTo(el.object3D.position);
+      const d = myPos.distanceTo(el.object3D.position);
       if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
     });
 
-    if (!nearestId) {
-      console.log('[HEAL] No ally in range to heal');
-      return;
-    }
-
-    performHeal(charId, nearestId);
+    // no allies left — fall back to healing yourself
+    this.heal(nearestId || me.id);
   },
 
   doHealSelf() {
-    const charId = this.data.characterId;
-    const char   = characters.get(charId);
-    if (!char || !char.isAlive) return;
+    this.heal(LOCAL_ID);
+  },
 
-    // same id for both healer and healee = self heal
-    performHeal(charId, charId);
+  heal(targetId) {
+    const amount = performHeal(LOCAL_ID, targetId);
+    if (amount > 0 && typeof sendHealEvent === 'function') sendHealEvent(targetId, amount);
   },
 
   remove() {
