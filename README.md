@@ -175,6 +175,8 @@ node index.js        # serves the game + lobby on http://localhost:9091 (PORT en
 ```
 Open `http://localhost:9091`. Friends on the same network join with the LAN address the server prints.
 
+Building the distributable versions: `node tools/build-web.mjs` writes `dist/web` (solo vs bots, static files for itch.io or any website) and `dist/lan` (game + server for hosting online matches).
+
 Re-optimizing the 3D models after regenerating them: `cd tools && npm install && node optimize-models.mjs ../assets/models`.
 
 ## Project Structure
