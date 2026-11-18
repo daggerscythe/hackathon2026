@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fate of Goliath — Solo Setup</title>
+  <link rel="stylesheet" href="menu.css" />
+  <style>
+    body { align-items: stretch; justify-content: flex-start; overflow: hidden; }
+
+    .setup-wrap {
+      position: relative; z-index: 1;
+      display: flex; width: 100vw; height: 100vh;
+    }
+
+    /* ── Left: choices ─────────────────────────────────────────────────── */
+    .setup-left {
+      width: 470px; flex-shrink: 0;
+      padding: 0 0 0 6vw;
+      display: flex; flex-direction: column; justify-content: center;
+      position: relative;
+    }
+    .setup-left::after {
+      content: ''; position: absolute; right: 0; top: 10%; height: 80%; width: 1px;
+      background: linear-gradient(180deg, transparent, rgba(201,168,76,0.3), transparent);
+    }
+
+    .section-label {
+      font-size: 0.6rem; letter-spacing: 5px; text-transform: uppercase;
+      color: var(--gold-dim); margin: 18px 0 8px;
+    }
+
+    .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+    .seg button {
+      font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase;
+      padding: 8px 14px; cursor: pointer;
+      color: var(--white-dim); background: rgba(201,168,76,0.03);
+      border: 1px solid rgba(201,168,76,0.2);
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .seg button:hover    { color: var(--gold-light); border-color: rgba(201,168,76,0.5); }
+    .seg button.selected { color: var(--gold-light); border-color: var(--gold); background: rgba(201,168,76,0.12); }
+
+    .hint { font-size: 0.62rem; letter-spacing: 1.5px; color: var(--white-faint); margin-top: 6px; min-height: 1em; }
+
+    .actions { display: flex; gap: 22px; align-items: center; margin-top: 28px; }
+
+    /* ── Right: character + lineup ────────────────────────────────────── */
+    .setup-right {
+      flex: 1; display: flex; flex-direction: column; justify-content: center;
+      padding: 0 6vw; gap: 26px;
+    }
+
+    .char-card {
+      border: 1px solid rgba(201,168,76,0.25);
+      background: rgba(8,10,14,0.55);
+      padding: 22px 26px; max-width: 560px;
+    }
+    .char-card .eyebrow { font-size: 0.55rem; letter-spacing: 5px; color: var(--gold-dim); text-transform: uppercase; }
+    .char-name { font-size: 1.7rem; color: var(--gold-light); margin: 6px 0 2px; }
+    .char-cls  { font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; color: var(--white-dim); }
+
+    .stats { display: grid; grid-template-columns: 44px 1fr 30px; gap: 7px 10px; margin-top: 16px; align-items: center; }
+    .stat-label { font-size: 0.6rem; letter-spacing: 2px; color: var(--white-dim); }
+    .stat-bar   { height: 5px; background: rgba(240,236,228,0.08); }
+    .stat-fill  { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold-light)); transition: width .3s; }
+    .stat-val   { font-size: 0.62rem; color: var(--white-faint); text-align: right; }
+    .stat-label.key { color: var(--gold-light); }
+
+    .reroll {
+      margin-top: 16px; font-family: 'Cinzel', serif; font-size: 0.62rem; letter-spacing: 3px;
+      text-transform: uppercase; background: none; border: none; color: var(--gold-dim); cursor: pointer;
+    }
+    .reroll:hover { color: var(--gold-light); }
+
+    .lineup { max-width: 560px; }
+    .lineup-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 8px 0; border-bottom: 1px solid rgba(201,168,76,0.1);
+      font-size: 0.78rem; color: var(--white-dim);
+    }
+    .lineup-row .who { color: var(--white); }
+    .lineup-row .tag { font-size: 0.58rem; letter-spacing: 3px; text-transform: uppercase; }
+    .lineup-row.enemy .tag { color: #c94c4c; }
+    .lineup-row.ally  .tag { color: #4ca8c9; }
+    .lineup-row.you   .tag { color: var(--gold-light); }
+
+    .how {
+      max-width: 560px; font-size: 0.66rem; line-height: 1.8; letter-spacing: 1px; color: var(--white-faint);
+    }
+    .how b { color: var(--white-dim); font-weight: 600; }
+
+    @media (max-width: 980px) {
+      body { overflow: auto; }
+      .setup-wrap { flex-direction: column; height: auto; }
+      .setup-left, .setup-right { width: 100%; padding: 32px 16px; }
+      .setup-left::after { display: none; }
+    }
+  </style>
+
+  <script src="../game/audio.js"></script>
+  <script src="../game/consistent_audio.js"></script>
+  <script src="../game/roster.js"></script>
+</head>
+<body>
+  <div class="setup-wrap">
+
+    <div class="setup-left">
+      <h1 class="game-title">Fate of Goliath</h1>
+      <p class="subtitle">Solo · versus bots</p>
+
+      <p class="section-label">— Your side</p>
+      <div class="seg" id="side-seg">
+        <button data-val="Hero">⚔ Slay Goliath</button>
+        <button data-val="Villain">💀 Be Goliath</button>
+      </div>
+      <p class="hint" id="side-hint"></p>
+
+      <p class="section-label">— Your class</p>
+      <div class="seg" id="class-seg"></div>
+      <p class="hint" id="class-hint"></p>
+
+      <p class="section-label">— Players in the arena</p>
+      <div class="seg" id="count-seg">
+        <button data-val="2">2</button>
+        <button data-val="3">3</button>
+        <button data-val="4">4</button>
+      </div>
+      <p class="hint" id="count-hint"></p>
+
+      <p class="section-label">— Bot difficulty</p>
+      <div class="seg" id="diff-seg">
+        <button data-val="easy">Easy</button>
+        <button data-val="normal">Normal</button>
+        <button data-val="hard">Hard</button>
+      </div>
+
+      <div class="actions">
+        <button class="menu-btn secondary" onclick="location.href='mode-select.html'">← Back</button>
+        <button class="menu-btn" id="start-btn" onclick="startSolo()">Enter the Arena →</button>
+      </div>
+    </div>
+
+    <div class="setup-right">
+      <div class="char-card">
+        <div class="eyebrow">Drawn from the archive</div>
+        <div class="char-name" id="char-name">…</div>
+        <div class="char-cls"  id="char-cls"></div>
+        <div class="stats" id="char-stats"></div>
+        <button class="reroll" onclick="drawCharacter(); drawBots(); render();">↻ Draw another</button>
+      </div>
+
+      <div class="lineup">
+        <p class="section-label">— The lineup</p>
+        <div id="lineup"></div>
+      </div>
+
+      <div class="how">
+        <b>WASD</b> move · <b>Space</b> jump · <b>Mouse</b> look · <b>LMB</b> attack ·
+        <b>RMB</b> self-heal (Support) · <b>Esc</b> release mouse.
+        Heroes win by felling Goliath or surviving 3:00. Goliath wins by defeating every hero.
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.addEventListener('click',   tryStartTheme, { once: true });
+    document.addEventListener('keydown', tryStartTheme, { once: true });
+
+    const CLASS_INFO = {
+      Hero: {
+        Tank:    { key: 'def', text: 'Melee bruiser. Defense shrugs off damage.' },
+        DPS:     { key: 'str', text: 'Melee damage dealer. Strength hits hard.' },
+        Support: { key: 'pow', text: 'Healer. LMB heals the nearest ally, RMB heals yourself.' },
+        Mage:    { key: 'mag', text: 'Ranged fireballs. Magic sets the damage.' },
+      },
+      Villain: {
+        Brute:   { key: 'str', text: 'Heavy melee. Strength crushes heroes.' },
+        Agile:   { key: 'spd', text: 'Fast melee hunter. Speed closes every gap.' },
+        Mage:    { key: 'mag', text: 'Ranged fireballs from a safe distance.' },
+      },
+    };
+
+    // restore the last setup so "play again" is one click
+    const saved = (() => { try { return JSON.parse(localStorage.getItem('soloSetup') || '{}'); } catch { return {}; } })();
+    const state = {
+      side:       saved.side       || 'Hero',
+      cls:        saved.cls        || null,
+      count:      saved.count      || 4,
+      difficulty: saved.difficulty || 'normal',
+      character:  null,   // pool entry
+      bots:       [],     // [{ side, entry }]
+    };
+
+    const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(p => p[1]);
+
+    function classesFor(side) {
+      return side === 'Villain' ? Roster.VILLAIN_CLASSES : Roster.HERO_CLASSES;
+    }
+
+    function drawCharacter() {
+      state.character = Roster.random(state.side, state.cls);
+    }
+
+    /** Fill the other slots: the opposite side, plus allies if you are a hero. */
+    function drawBots() {
+      const bots = [];
+      if (state.side === 'Villain') {
+        // vary the hero classes so the fight feels different every time
+        shuffle(Roster.HERO_CLASSES).slice(0, state.count - 1)
+          .forEach(cls => bots.push({ side: 'Hero', entry: Roster.random('Hero', cls) }));
+      } else {
+        const villainCls = shuffle(Roster.VILLAIN_CLASSES)[0];
+        bots.push({ side: 'Villain', entry: Roster.random('Villain', villainCls) });
+        shuffle(Roster.HERO_CLASSES.filter(c => c !== state.cls)).slice(0, state.count - 2)
+          .forEach(cls => bots.push({ side: 'Hero', entry: Roster.random('Hero', cls) }));
+      }
+      state.bots = bots;
+    }
+
+    function setSeg(id, value, values, onPick) {
+      const seg = document.getElementById(id);
+      if (values) {
+        seg.innerHTML = '';
+        values.forEach(v => {
+          const b = document.createElement('button');
+          b.dataset.val = v; b.textContent = v;
+          seg.appendChild(b);
+        });
+      }
+      seg.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('selected', b.dataset.val === String(value));
+        b.onclick = () => onPick(b.dataset.val);
+      });
+    }
+
+    function render() {
+      setSeg('side-seg', state.side, null, v => {
+        state.side = v; state.cls = classesFor(v)[0];
+        drawCharacter(); drawBots(); render();
+      });
+      setSeg('class-seg', state.cls, classesFor(state.side), v => {
+        state.cls = v; drawCharacter(); drawBots(); render();
+      });
+      setSeg('count-seg', state.count, null, v => {
+        state.count = +v; drawBots(); render();
+      });
+      setSeg('diff-seg', state.difficulty, null, v => {
+        state.difficulty = v; render();
+      });
+
+      document.getElementById('side-hint').textContent = state.side === 'Villain'
+        ? 'You are Goliath. Health grows with every hero in the arena.'
+        : 'Team up with hero bots to bring down a Goliath bot.';
+      document.getElementById('class-hint').textContent = CLASS_INFO[state.side][state.cls].text;
+      document.getElementById('count-hint').textContent = state.side === 'Villain'
+        ? `You vs ${state.count - 1} hero${state.count > 2 ? 'es' : ''}`
+        : `You${state.count > 2 ? ` + ${state.count - 2} all${state.count > 3 ? 'ies' : 'y'}` : ''} vs Goliath`;
+
+      // character card
+      const c = state.character;
+      document.getElementById('char-name').textContent = c ? c.name : '—';
+      document.getElementById('char-cls').textContent  = c ? `${state.side} · ${c.cls}` : '';
+      const keyStat = CLASS_INFO[state.side][state.cls].key;
+      document.getElementById('char-stats').innerHTML = !c ? '' : [
+        ['STR', 'str'], ['MAG', 'mag'], ['DEF', 'def'], ['SPD', 'spd'], ['POW', 'pow'],
+      ].map(([label, k]) => `
+        <div class="stat-label ${k === keyStat ? 'key' : ''}">${label}</div>
+        <div class="stat-bar"><div class="stat-fill" style="width:${c[k]}%"></div></div>
+        <div class="stat-val">${c[k]}</div>
+      `).join('');
+
+      // lineup
+      const rows = [`<div class="lineup-row you"><span class="who">${c ? c.name : 'You'}</span><span class="tag">You · ${state.cls}</span></div>`];
+      state.bots.forEach(({ side, entry }) => {
+        const enemy = side !== state.side;
+        rows.push(`<div class="lineup-row ${enemy ? 'enemy' : 'ally'}">
+          <span class="who">${entry.name}</span>
+          <span class="tag">${enemy ? (side === 'Villain' ? 'Goliath' : 'Hero') : 'Ally'} · ${entry.cls}</span>
+        </div>`);
+      });
+      document.getElementById('lineup').innerHTML = rows.join('');
+    }
+
+    function startSolo() {
+      if (!state.character) return;
+      try {
+        localStorage.setItem('soloSetup', JSON.stringify({
+          side: state.side, cls: state.cls, count: state.count, difficulty: state.difficulty,
+        }));
+      } catch {}
+
+      sessionStorage.setItem('gameMode', 'solo');
+      sessionStorage.setItem('clientId', 'local');
+      sessionStorage.setItem('soloConfig', JSON.stringify({
+        difficulty: state.difficulty,
+        player:     Roster.toGameCharacter(state.character, state.side),
+        bots:       state.bots.map(b => Roster.toGameCharacter(b.entry, b.side)),
+      }));
+      location.href = '../arena.html';
+    }
+
+    Roster.load().then(() => {
+      if (!classesFor(state.side).includes(state.cls)) state.cls = classesFor(state.side)[0];
+      drawCharacter();
+      drawBots();
+      render();
+    });
+  </script>
+</body>
+</html>
